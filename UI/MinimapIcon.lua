@@ -14,7 +14,7 @@ MinimapIcon.icon = nil
 local function CreateLDBObject()
     local ldb = LibStub:GetLibrary("LibDataBroker-1.1", true)
     if not ldb then
-        -- Create minimal LDB if not available
+        if GF.Debug and GF.Debug.Log then GF.Debug:Log("LibDataBroker not available, minimap icon disabled") end
         return nil
     end
 

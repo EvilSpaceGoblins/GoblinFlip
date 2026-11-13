@@ -241,6 +241,11 @@ function App:Initialize()
         GF.UI.MinimapIcon.Initialize()
     end
 
+    -- Slash commands
+    if GF.SlashCommands then
+        GF.SlashCommands.Initialize()
+    end
+
     self:BuildPurchaseManager()
     self:RegisterEvents()
     self:RegisterTicker()
