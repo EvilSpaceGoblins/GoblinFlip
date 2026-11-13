@@ -1,6 +1,6 @@
-# GoblinFlip v0.1
+# GoblinFlip v0.2
 
-[![Version](https://img.shields.io/badge/version-v0.1-blue.svg)](https://github.com/EvilSpaceGoblins/GoblinFlip/releases/tag/v0.1)
+[![Version](https://img.shields.io/badge/version-v0.2-blue.svg)](https://github.com/EvilSpaceGoblins/GoblinFlip/releases/tag/v0.2)
 [![WoW Version](https://img.shields.io/badge/WoW-Forever%201.60.1-orange.svg)]()
 [![TOC](https://img.shields.io/badge/TOC-16001-green.svg)]()
 [![Tests](https://img.shields.io/badge/tests-68%2F68%20passing-brightgreen.svg)]()
@@ -236,7 +236,7 @@ luacheck GoblinFlip
 | Version | Focus | Status |
 |:---|:---|:---|
 | **v0.1** | Core engine, scan pipeline, vendor/DE flips, ledger, standalone mode | ✅ Done |
-| **v0.2** | **UI Implementation** (Widgets, Filters, ResultsTable, BuyPane, Dashboard, History, LedgerView, Options, MainTab, Standalone), AuctionHouse tab via LibAHTab, slash commands | 🔄 Next |
+| **v0.2** | **UI Implementation** (Widgets, Filters, ResultsTable, BuyPane, Dashboard, History, LedgerView, Options, MainTab, Standalone), AuctionHouse tab via LibAHTab, slash commands | ✅ Done |
 | **v0.3** | Tooltip enhancements, context menus, search, advanced filters, ledger export | 📋 Planned |
 | **v1.0** | Stable, validated, documented, translated | 📋 Planned |
 
