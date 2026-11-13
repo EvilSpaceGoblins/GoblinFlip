@@ -1,7 +1,7 @@
 ## Interface: 16001
 ## Title: GoblinFlip
 ## Notes: Find profitable vendor and disenchant flips at the auction house.
-## Version: 0.3.0
+## Version: 0.4.0
 ## Author: GoblinFlip contributors
 ## SavedVariables: GoblinFlipDB
 ## RequiredDeps: 
