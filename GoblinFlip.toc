@@ -20,6 +20,7 @@ Domain\ScanNormalizer.lua
 Domain\ItemCache.lua
 Domain\VendorStrategy.lua
 Domain\DisenchantStrategy.lua
+Domain\DisenchantData.lua
 Domain\ProfitEngine.lua
 Domain\OpportunityIndex.lua
 Domain\Ledger.lua

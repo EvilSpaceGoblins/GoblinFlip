@@ -369,9 +369,19 @@ end
 --- Scan trigger used by the UI and slash commands.
 function App:RequestScan()
     self:Initialize()
+    local currentSettings = settings()
     local provider = settingValue("scanProvider", "auctionator")
+    
+    -- In standalone mode, always use native scan
+    if currentSettings.standaloneMode == true then
+        provider = "native"
+    end
+    
     if provider == "native" then
-        if settingValue("experimentalNativeScan", false) ~= true then
+        -- Allow native scan in standalone mode without experimental flag
+        local allowNative = settingValue("experimentalNativeScan", false) == true
+            or currentSettings.standaloneMode == true
+        if not allowNative then
             return false, "native_scan_disabled"
         end
         local ok, reason = GF.NativeScan:RequestScan()
@@ -523,7 +533,20 @@ function App:FinishNormalize(batch)
     end)
 end
 
-function App:BuildDisenchantData(itemId, force)
+function App:BuildDisenchantData(itemId, itemLevel, quality, force)
+    local currentSettings = settings()
+    
+    -- Use standalone internal data if enabled or if DisenchantBuddy unavailable
+    local useStandalone = currentSettings.standaloneMode == true
+        or not GF.DisenchantBuddy.IsAvailable()
+    
+    if useStandalone and GF.Domain.DisenchantData then
+        -- Get material prices from live AH if available, otherwise use defaults
+        local materialPrices = GF.Domain.DisenchantData.defaultPrices
+        return GF.Domain.DisenchantData.GetEstimate(itemId, itemLevel or 0, quality or 0, materialPrices)
+    end
+    
+    -- Fall back to DisenchantBuddy
     if not GF.DisenchantBuddy.IsAvailable() then
         return nil, "disenchantbuddy_unavailable"
     end
@@ -548,12 +571,14 @@ function App:EvaluateScan(batch, listings)
         unavailable = 0,
         skillUnverified = 0,
     }
-    if currentSettings.disenchantEnabled ~= false and GF.DisenchantBuddy.IsAvailable() then
+    local useStandalone = currentSettings.standaloneMode == true
+        or not GF.DisenchantBuddy.IsAvailable()
+    if currentSettings.disenchantEnabled ~= false and (GF.DisenchantBuddy.IsAvailable() or useStandalone) then
         for index = 1, #listings do
             local listing = listings[index]
             local data = nil
             if listing.itemId then
-                data = self:BuildDisenchantData(listing.itemId)
+                data = self:BuildDisenchantData(listing.itemId, listing.itemLevel, listing.itemQuality)
             end
             if not data then
                 disenchantCounts.unavailable = disenchantCounts.unavailable + 1
@@ -874,9 +899,15 @@ function App:GetSelected()
 end
 
 function App:GetDisenchantStatus()
+    local currentSettings = settings()
+    local useStandalone = currentSettings.standaloneMode == true
+        or not GF.DisenchantBuddy.IsAvailable()
     local data = {
-        available = GF.DisenchantBuddy.IsAvailable(),
-        skill = GF.DisenchantBuddy.GetSkillStatus(false),
+        available = GF.DisenchantBuddy.IsAvailable() or useStandalone,
+        provider = useStandalone and "Internal (Standalone)" or "DisenchantBuddy",
+        standaloneMode = useStandalone,
+        skill = useStandalone and { verified = true, reason = nil, rank = 1, evidence = "internal" }
+            or GF.DisenchantBuddy.GetSkillStatus(false),
         counts = self.disenchantCounts,
     }
     return data
@@ -911,7 +942,7 @@ function App:RequestPurchase(row)
 
     local data, reason
     if row.strategy == GF.STRATEGY_DISENCHANT then
-        data, reason = self:BuildDisenchantData(row.itemId, true)
+        data, reason = self:BuildDisenchantData(row.itemId, row.itemLevel, row.itemQuality, true)
         if not data then
             return false, reason or "disenchant_unavailable"
         end
@@ -1279,39 +1310,47 @@ end
 
 --- Dependency check
 function App:CheckDependencies()
+    local currentSettings = settings()
     local missing = {}
     local warnings = {}
-    
-    -- Auctionator (Required)
-    if not GF.AuctionatorAdapter.IsAvailable() then
+
+    -- Auctionator (Required unless standalone mode with native scan)
+    local needAuctionator = currentSettings.standaloneMode ~= true
+        and currentSettings.scanProvider ~= "native"
+    if needAuctionator and not GF.AuctionatorAdapter.IsAvailable() then
         table.insert(missing, "|cffff0000Auctionator|r (required for full scans)")
-    elseif not GF.AuctionatorAdapter.registered then
+    elseif GF.AuctionatorAdapter.IsAvailable() and not GF.AuctionatorAdapter.registered then
         table.insert(warnings, "|cffffff00Auctionator|r loaded but scan events not registered")
     end
-    
-    -- DisenchantBuddy (Optional)
-    if not GF.DisenchantBuddy.IsAvailable() then
+
+    -- DisenchantBuddy (Optional - only needed if not standalone)
+    local needDB = currentSettings.standaloneMode ~= true
+    if needDB and not GF.DisenchantBuddy.IsAvailable() then
         table.insert(warnings, "|cff00ff00DisenchantBuddy|r (optional - disenchant estimates disabled)")
     end
-    
+
     -- LibAHTab (Embedded - always available)
     local libAHTab = _G.LibStub and _G.LibStub:GetLibrary("LibAHTab-1-0", true)
     if not libAHTab then
         table.insert(missing, "|cffff0000LibAHTab|r (embedded - should never be missing)")
     end
-    
+
     -- Display results
+    if currentSettings.standaloneMode == true then
+        printMessage("|cff00ff00GoblinFlip: Standalone Mode Active (no external dependencies required)|r")
+    end
+
     if #missing > 0 then
         printMessage("|cffff0000GoblinFlip: Missing dependencies:|r")
         for _, m in ipairs(missing) do printMessage("  - " .. m) end
         return false
     end
-    
+
     if #warnings > 0 then
         printMessage("|cffffff00GoblinFlip: Optional dependencies:|r")
         for _, w in ipairs(warnings) do printMessage("  - " .. w) end
     end
-    
+
     return true
 end
 

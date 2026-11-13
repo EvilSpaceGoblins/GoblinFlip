@@ -35,9 +35,9 @@ A World of Warcraft: **Forever (1.60.1)** auction-house addon that helps you fin
 | Category | Feature | Status |
 |:---|:---|:---:|
 | **Scanning** | Auctionator `Get All` integration | ✅ |
-| | Native replicate scan (experimental) | ⚠️ Opt-in |
+| | Native replicate scan (standalone mode) | ✅ |
 | **Analysis** | Vendor flips (exact profit) | ✅ |
-| | Disenchant estimates (DisenchantBuddy) | ✅ |
+| | Disenchant estimates (internal or DisenchantBuddy) | ✅ |
 | | Market detection (Horde/Ally/Neutral) | ✅ |
 | **Execution** | One-submission-at-a-time guarantee | ✅ |
 | | Live quote before every purchase | ✅ |
@@ -48,6 +48,7 @@ A World of Warcraft: **Forever (1.60.1)** auction-house addon that helps you fin
 | **UX** | In-game dependency check | ✅ |
 | | Sound alerts (opt-in, rate-limited) | ✅ |
 | | Tooltip & context menu integration | ✅ |
+| | **Standalone mode (zero dependencies)** | ✅ |
 
 ---
 
@@ -65,17 +66,46 @@ unzip GoblinFlip.zip -d "/Applications/World of Warcraft/_forever_/Interface/Add
 ```
 
 ### Requirements
+
 | Dependency | Required? | Purpose | Download |
 |:---|:---:|:---|:---|
-| **Auctionator** | ✅ Yes | Full-scan data source | [CurseForge](https://www.curseforge.com/wow/addons/auctioneer-forever) |
-| **DisenchantBuddy** | ⭕ Optional | Disenchant value estimates | [CurseForge](https://www.curseforge.com/wow/addons/disenchantbuddy) |
+| **Auctionator** | ⭕ Optional* | Full-scan data source (faster) | [CurseForge](https://www.curseforge.com/wow/addons/auctioneer-forever) |
+| **DisenchantBuddy** | ⭕ Optional* | Disenchant value estimates | [CurseForge](https://www.curseforge.com/wow/addons/disenchantbuddy) |
 | **LibStub** | 📦 Embedded | Library loader | Included |
 | **LibAHTab** | 📦 Embedded | AH tab integration | Included |
+
+> **\*Optional in Standalone Mode** — Enable `standaloneMode` in settings to use native scan + internal DE data with **zero external dependencies**.
+
+---
+
+### 🎯 Standalone Mode (Zero Dependencies)
+
+GoblinFlip includes a **Standalone Mode** that works completely without Auctionator or DisenchantBuddy:
+
+```lua
+-- Enable in settings (or via slash command):
+/gf settings standaloneMode true
+```
+
+| Feature | With Auctionator | Standalone Mode |
+|:---|:---|:---|
+| **Full scan** | Auctionator `Get All` (fast, ~30s) | Native `ReplicateItems` (slower, ~2-5 min) |
+| **Live search** | Native (same) | Native (same) |
+| **DE estimates** | DisenchantBuddy API | Internal tables (Classic → MoP) |
+| **Dependencies** | Auctionator required | **Zero external deps** |
+
+**When to use Standalone Mode:**
+- You don't want to install Auctionator
+- You're on a fresh Forever client
+- You prefer zero-dependency addons
+
+**Trade-offs:** Native scan is slower and can disconnect if the server throttles. Auctionator is recommended for regular use.
 
 ---
 
 ## 🚀 Quick Start
 
+### With Auctionator (Recommended)
 ```text
 1. Open Auction House
 2. Click Auctionator's "Get All" button (manual scan trigger)
@@ -83,6 +113,16 @@ unzip GoblinFlip.zip -d "/Applications/World of Warcraft/_forever_/Interface/Add
 4. Browse "Vendor Flips" tab — sorted by profit
 5. Click an opportunity → "Buy Next" → Confirm
 6. Check Ledger for results
+```
+
+### Standalone Mode (No Auctionator)
+```text
+1. Enable: /gf settings standaloneMode true
+2. Open Auction House
+3. Click "Scan" in GoblinFlip tab
+4. Wait for native scan (2-5 minutes)
+5. Browse opportunities
+6. Purchase & track in Ledger
 ```
 
 ### Slash Commands
@@ -232,7 +272,7 @@ Built for **WoW Forever 1.60.1** (TOC 16001). Other versions untested.
 
 <details>
 <summary><strong>Can I run this without Auctionator?</strong></summary>
-No — Auctionator is required for scans. Native replicate scan is experimental and disabled by default.
+Yes! Enable **Standalone Mode** in settings (`/gf settings standaloneMode true`). GoblinFlip will use native `ReplicateItems` scans and internal DE tables. No Auctionator or DisenchantBuddy required.
 </details>
 
 <details>
