@@ -298,6 +298,8 @@ function App:RegisterEvents()
         "AUCTION_HOUSE_SHOW",
         "AUCTION_HOUSE_CLOSED",
         "AUCTION_HOUSE_NEW_BID_RECEIVED",
+        "PLAYER_INTERACTION_MANAGER_FRAME_SHOW",
+        "PLAYER_INTERACTION_MANAGER_FRAME_HIDE",
     }
     for index = 1, #events do
         pcall(frame.RegisterEvent, frame, events[index])
@@ -326,14 +328,32 @@ function App:HandleEvent(event, ...)
         self:Save()
     elseif event == "AUCTION_HOUSE_SHOW" then
         self:DetectMarket(true)
+        -- Legacy event fallback
         if GF.UI and GF.UI.AttachToAuctionHouse then
             pcall(GF.UI.AttachToAuctionHouse)
         end
         -- Re-check dependencies after AH opens (Auctionator may have loaded late)
         App:After(1, function() App:CheckDependencies() end)
+    elseif event == "PLAYER_INTERACTION_MANAGER_FRAME_SHOW" then
+        -- Modern interaction system (Forever/Retail)
+        local interactionType = ...
+        if interactionType == Enum.PlayerInteractionType.Auctioneer then
+            self:DetectMarket(true)
+            if GF.UI and GF.UI.AttachToAuctionHouse then
+                pcall(GF.UI.AttachToAuctionHouse)
+            end
+            App:After(1, function() App:CheckDependencies() end)
+        end
     elseif event == "AUCTION_HOUSE_CLOSED" then
         if self.purchase then
             self.purchase:OnAhClosed()
+        end
+    elseif event == "PLAYER_INTERACTION_MANAGER_FRAME_HIDE" then
+        local interactionType = ...
+        if interactionType == Enum.PlayerInteractionType.Auctioneer then
+            if self.purchase then
+                self.purchase:OnAhClosed()
+            end
         end
     elseif event == "AUCTION_HOUSE_NEW_BID_RECEIVED" then
         self:CheckPendingConfirmation()

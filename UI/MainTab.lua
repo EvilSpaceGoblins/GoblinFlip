@@ -22,7 +22,18 @@ function MainTab.Create()
         return nil
     end
 
-    -- Create main frame
+    -- Check if AuctionHouseFrame exists and has tabs
+    if not AuctionHouseFrame then
+        if GF.Debug and GF.Debug.Log then GF.Debug:Log("AuctionHouseFrame not available") end
+        return nil
+    end
+
+    if not AuctionHouseFrame.Tabs or #AuctionHouseFrame.Tabs == 0 then
+        if GF.Debug and GF.Debug.Log then GF.Debug:Log("AuctionHouseFrame.Tabs not available or empty") end
+        -- Try to wait for tabs to be created
+    end
+
+    -- Create main frame (LibAHTab will handle showing/hiding based on tab selection)
     local frame = CreateFrame("Frame", "GoblinFlipMainTabFrame", AuctionHouseFrame)
     frame:SetSize(800, 500)
     frame:SetPoint("TOPLEFT", AuctionHouseFrame, "TOPLEFT", 0, -60)
@@ -30,24 +41,20 @@ function MainTab.Create()
     frame:Hide()
     MainTab.frame = frame
 
-    -- Tab content will be populated when shown
-    frame:SetScript("OnShow", function()
-        MainTab.OnShow()
-    end)
-
-    frame:SetScript("OnHide", function()
-        MainTab.OnHide()
-    end)
+    -- Frame will be shown/hidden by LibAHTab when tab is selected/deselected
+    -- No OnShow/OnHide scripts needed - LibAHTab handles this
 
     -- Create the tab via LibAHTab
-    local success = pcall(function()
+    local success, err = pcall(function()
         libAHTab:CreateTab(MainTab.tabId, frame, GF.L["GoblinFlip"], GF.L["GoblinFlip"])
     end)
 
     if not success then
-        if GF.Debug and GF.Debug.Log then GF.Debug:Log("Failed to create AH tab") end
+        if GF.Debug and GF.Debug.Log then GF.Debug:Log("Failed to create AH tab: " .. tostring(err)) end
         return nil
     end
+
+    if GF.Debug and GF.Debug.Log then GF.Debug:Log("AH tab created successfully: " .. MainTab.tabId) end
 
     MainTab.attached = true
     return frame

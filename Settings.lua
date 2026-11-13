@@ -37,6 +37,12 @@ local DEFAULTS = {
     standaloneMode = false,
     cooldownHint = 900,
     soundFile = "Sound\\Interface\\AuctionWindowOpen.wav",
+    minimapIcon = {
+        hide = false,
+        minimapPos = 225,
+        radius = 80,
+        lock = false,
+    },
 }
 
 GF.Settings.DEFAULTS = DEFAULTS
