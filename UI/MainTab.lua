@@ -77,66 +77,164 @@ function MainTab.BuildUI()
     local frame = MainTab.frame
     if not frame then return end
 
-    -- Left panel: Filters (300px)
-    local leftPanel = CreateFrame("Frame", nil, frame)
-    leftPanel:SetPoint("TOPLEFT", 0, 0)
-    leftPanel:SetPoint("BOTTOMLEFT", 0, 0)
-    leftPanel:SetWidth(300)
+    -- Sub-tab bar
+    local subTabBar = CreateFrame("Frame", nil, frame)
+    subTabBar:SetPoint("TOPLEFT", 0, 0)
+    subTabBar:SetPoint("TOPRIGHT", 0, 0)
+    subTabBar:SetHeight(24)
+    MainTab.subTabBar = subTabBar
 
-    GF.UI.Filters.Create(leftPanel)
-    local filtersFrame = GF.UI.Filters.GetFrame()
-    if filtersFrame then
-        filtersFrame:SetParent(leftPanel)
-        filtersFrame:SetAllPoints()
-        filtersFrame:Show()
+    -- Sub-tabs: Dashboard, Ledger, History, Options
+    MainTab.subTabs = {
+        { id = "dashboard", text = GF.L["Dashboard"], frame = nil },
+        { id = "ledger", text = GF.L["Ledger"], frame = nil },
+        { id = "history", text = GF.L["History"], frame = nil },
+        { id = "options", text = GF.L["Settings"], frame = nil },
+    }
+
+    local tabButtons = {}
+    for i, tab in ipairs(MainTab.subTabs) do
+        local btn = CreateFrame("Button", nil, subTabBar, "PanelTabButtonTemplate")
+        btn:SetID(i)
+        btn:SetText(tab.text)
+        btn:SetPoint("TOPLEFT", subTabBar, "TOPLEFT", (i - 1) * 80 + 4, -2)
+        PanelTemplates_TabResize(btn, 0)
+        btn:SetScript("OnClick", function(self)
+            MainTab.SelectSubTab(self:GetID())
+        end)
+        tabButtons[i] = btn
+    end
+    MainTab.subTabButtons = tabButtons
+
+    -- Content container (below sub-tabs)
+    local contentFrame = CreateFrame("Frame", nil, frame)
+    contentFrame:SetPoint("TOPLEFT", subTabBar, "BOTTOMLEFT", 0, -2)
+    contentFrame:SetPoint("BOTTOMRIGHT", 0, 0)
+    MainTab.contentFrame = contentFrame
+
+    -- Create sub-tab content frames
+    for _, tab in ipairs(MainTab.subTabs) do
+        local content = CreateFrame("Frame", nil, contentFrame)
+        content:SetAllPoints()
+        content:Hide()
+        tab.frame = content
     end
 
-    -- Right panel: Results + Buy Pane
-    local rightPanel = CreateFrame("Frame", nil, frame)
-    rightPanel:SetPoint("TOPLEFT", leftPanel, "TOPRIGHT", 0, 0)
-    rightPanel:SetPoint("BOTTOMRIGHT", 0, 0)
+    -- Build each sub-tab content
+    MainTab.BuildDashboardTab()
+    MainTab.BuildLedgerTab()
+    MainTab.BuildHistoryTab()
+    MainTab.BuildOptionsTab()
 
-    -- Results table (top)
-    local resultsFrame = CreateFrame("Frame", nil, rightPanel)
-    resultsFrame:SetPoint("TOPLEFT", 0, 0)
-    resultsFrame:SetPoint("TOPRIGHT", 0, 0)
-    resultsFrame:SetHeight(350)
-
-    GF.UI.ResultsTable.Create(resultsFrame)
-    local tableFrame = GF.UI.ResultsTable.GetFrame()
-    if tableFrame then
-        tableFrame:SetParent(resultsFrame)
-        tableFrame:SetAllPoints()
-        tableFrame:Show()
-    end
-
-    -- Buy pane (bottom)
-    local buyFrame = CreateFrame("Frame", nil, rightPanel)
-    buyFrame:SetPoint("TOPLEFT", resultsFrame, "BOTTOMLEFT", 0, -5)
-    buyFrame:SetPoint("BOTTOMRIGHT", 0, 0)
-
-    GF.UI.BuyPane.Create(buyFrame)
-    local buyPaneFrame = GF.UI.BuyPane.GetFrame()
-    if buyPaneFrame then
-        buyPaneFrame:SetParent(buyFrame)
-        buyPaneFrame:SetAllPoints()
-        buyPaneFrame:Hide() -- Hidden until selection
-    end
-
-    -- Connect callbacks
-    GF.UI.ResultsTable.SetOnSelect(function(data)
-        if data then
-            GF.App:Select(data)
-            if GF.UI.BuyPane.SetOpportunity then
-                GF.UI.BuyPane.SetOpportunity(data)
-            end
-        else
-            GF.UI.BuyPane.Hide()
-        end
-    end)
+    -- Select first tab by default
+    MainTab.SelectSubTab(1)
 
     -- Initial refresh
-    if GF.UI.ResultsTable.Refresh then GF.UI.ResultsTable.Refresh() end
+    if GF.UI.ResultsTable.Refresh then
+        GF.UI.ResultsTable.Refresh()
+    end
+    if GF.UI.Dashboard.Refresh then
+        GF.UI.Dashboard.Refresh()
+    end
+    if GF.UI.LedgerView.Refresh then
+        GF.UI.LedgerView.Refresh()
+    end
+    if GF.UI.History.Refresh then
+        GF.UI.History.Refresh()
+    end
+    if GF.UI.Options.Refresh then
+        GF.UI.Options.Refresh()
+    end
+end
+
+
+
+--- Select a sub-tab by index.
+---@param index number
+function MainTab.SelectSubTab(index)
+    if not MainTab.subTabs or index < 1 or index > #MainTab.subTabs then return end
+    
+    -- Update button states
+    for i, btn in ipairs(MainTab.subTabButtons or {}) do
+        if i == index then
+            PanelTemplates_SelectTab(btn)
+        else
+            PanelTemplates_DeselectTab(btn)
+        end
+    end
+    
+    -- Show/hide content frames
+    for i, tab in ipairs(MainTab.subTabs) do
+        if tab.frame then
+            if i == index then
+                tab.frame:Show()
+            else
+                tab.frame:Hide()
+            end
+        end
+    end
+    
+    MainTab.currentSubTab = index
+end
+
+--- Build Dashboard sub-tab content.
+function MainTab.BuildDashboardTab()
+    local tab = MainTab.subTabs[1]
+    if not tab or not tab.frame then return end
+    
+    if GF.UI.Dashboard and GF.UI.Dashboard.Create then
+        local frame = GF.UI.Dashboard.Create(tab.frame)
+        if frame then
+            frame:SetParent(tab.frame)
+            frame:SetAllPoints()
+            frame:Show()
+        end
+    end
+end
+
+--- Build Ledger sub-tab content.
+function MainTab.BuildLedgerTab()
+    local tab = MainTab.subTabs[2]
+    if not tab or not tab.frame then return end
+    
+    if GF.UI.LedgerView and GF.UI.LedgerView.Create then
+        local frame = GF.UI.LedgerView.Create(tab.frame)
+        if frame then
+            frame:SetParent(tab.frame)
+            frame:SetAllPoints()
+            frame:Show()
+        end
+    end
+end
+
+--- Build History sub-tab content.
+function MainTab.BuildHistoryTab()
+    local tab = MainTab.subTabs[3]
+    if not tab or not tab.frame then return end
+    
+    if GF.UI.History and GF.UI.History.Create then
+        local frame = GF.UI.History.Create(tab.frame)
+        if frame then
+            frame:SetParent(tab.frame)
+            frame:SetAllPoints()
+            frame:Show()
+        end
+    end
+end
+
+--- Build Options sub-tab content.
+function MainTab.BuildOptionsTab()
+    local tab = MainTab.subTabs[4]
+    if not tab or not tab.frame then return end
+    
+    if GF.UI.Options and GF.UI.Options.Create then
+        local frame = GF.UI.Options.Create(tab.frame)
+        if frame then
+            frame:SetParent(tab.frame)
+            frame:SetAllPoints()
+            frame:Show()
+        end
+    end
 end
 
 --- Show the tab.

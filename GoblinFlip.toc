@@ -1,7 +1,7 @@
 ## Interface: 16001
 ## Title: GoblinFlip
 ## Notes: Find profitable vendor and disenchant flips at the auction house.
-## Version: 0.4.0
+## Version: 0.5.0
 ## Author: GoblinFlip contributors
 ## SavedVariables: GoblinFlipDB
 ## RequiredDeps: 
@@ -15,6 +15,8 @@ Libs\LibAHTab\LibAHTab.lua
 Libs\LibDBIcon\LibDBIcon.lua
 
 UI\MinimapIcon.lua
+
+Localization_deDE.lua
 
 Core.lua
 Compatibility.lua

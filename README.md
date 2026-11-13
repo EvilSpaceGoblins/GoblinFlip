@@ -1,6 +1,6 @@
-# GoblinFlip v0.4
+# GoblinFlip v0.5
 
-[![Version](https://img.shields.io/badge/version-v0.4-blue.svg)](https://github.com/EvilSpaceGoblins/GoblinFlip/releases/tag/v0.4)
+[![Version](https://img.shields.io/badge/version-v0.5-blue.svg)](https://github.com/EvilSpaceGoblins/GoblinFlip/releases/tag/v0.5)
 [![WoW Version](https://img.shields.io/badge/WoW-Forever%201.60.1-orange.svg)]()
 [![TOC](https://img.shields.io/badge/TOC-16001-green.svg)]()
 [![Tests](https://img.shields.io/badge/tests-68%2F68%20passing-brightgreen.svg)]()
@@ -244,6 +244,7 @@ luacheck GoblinFlip
 | **v0.2** | **UI Implementation** (Widgets, Filters, ResultsTable, BuyPane, Dashboard, History, LedgerView, Options, MainTab, Standalone), AuctionHouse tab via LibAHTab, slash commands | ✅ Done |
 | **v0.3** | Tooltip enhancements (vendor/DE breakdown on hover), context menus, enhanced search | ✅ Done |
 | **v0.4** | Minimap icon (LibDBIcon), Trade ledger (mail auto-match, vendor tracking, manual entry), Stubby optional support, AH tab fix | ✅ Done |
+| **v0.5** | **Sub-tabs in AH tab** (Dashboard, Ledger, History, Options), **deDE translation** | ✅ Done |
 | **v1.0** | Stable, validated, documented, translated | 📋 Planned |
 
 ---
