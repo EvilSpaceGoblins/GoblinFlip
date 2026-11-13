@@ -227,6 +227,12 @@ function App:Initialize()
     GF.Mailbox.Initialize()
     GF.Merchant.Initialize()
 
+    -- Tooltip and context menu integration (optional, settings-controlled)
+    if settingValue("showFlipTooltip", false) == true then
+        self:HookTooltips()
+    end
+    self:RegisterTooltipEvents()
+
     self:BuildPurchaseManager()
     self:RegisterEvents()
     self:RegisterTicker()
@@ -1264,4 +1270,191 @@ function App:GetStatusLine()
     parts[#parts + 1] = self.scanState
     parts[#parts + 1] = string.format("%d/%d", #self.allVendor, #self.allDisenchant)
     return table.concat(parts, " | ")
+end
+
+--- Tooltip and context menu integration
+-- Toggles whether GoblinFlip shows info lines on item tooltips.
+function App:ToggleFlipTooltip()
+    local current = settingValue("showFlipTooltip", false)
+    local newValue = not current
+    GF.Settings.Set("showFlipTooltip", newValue)
+    if GF.UI and GF.UI.UpdateTooltipSettings then
+        pcall(GF.UI.UpdateTooltipSettings, newValue)
+    end
+    notify("tooltip_toggle", newValue)
+    return newValue
+end
+
+--- Show a context menu for the currently hovered item or selected opportunity.
+function App:ShowFlipContextMenu()
+    if not self.selected then
+        printMessage(GF.L["No opportunity selected."])
+        return
+    end
+    if not settingValue("showFlipContextMenu", true) then
+        printMessage(GF.L["Context menu disabled in settings."])
+        return
+    end
+
+    local menu = {
+        {
+            text = GF.L["Open Auction House scan for this item"],
+            notCheckable = true,
+            func = function()
+                App:RequestPurchase(self.selected)
+            end,
+        },
+        {
+            text = GF.L["Toggle tooltip"],
+            notCheckable = true,
+            func = function()
+                App:ToggleFlipTooltip()
+            end,
+        },
+        {
+            text = GF.L["Copy item link"],
+            notCheckable = true,
+            func = function()
+                if self.selected.itemLink then
+                    local link = self.selected.itemLink
+                    -- Use copying function if available
+                    local canCopy = CopyChatEdit and CopyChatEdit:GetEditedItem
+                    if canCopy then
+                        CopyChatEdit:GetEditedItem(link)
+                    else
+                        printMessage(" |cffffd200" .. link .. "|r")
+                    end
+                else
+                    printMessage(GF.L["No item link available."])
+                end
+            end,
+        },
+        {
+            text = CLOSE,
+            notCheckable = true,
+            func = function() end,
+        },
+    }
+
+    -- Try to use UIDropDownMenu, fallback to simple print
+    if UIDropDownMenu_Show then
+        -- Attempt to show dropdown at cursor position
+        local dropdown = CreateFrame("Frame", "GoblinFlipContextMenu", UIParent, "UIDropDownMenuTemplate")
+        UIDropDownMenu_Initialize(dropdown, function(self2)
+            for index = 1, #menu do
+                local info = UIDropDownMenu_CreateInfo()
+                info.text = menu[index].text
+                info.notCheckable = menu[index].notCheckable
+                info.func = menu[index].func
+                UIDropDownMenu_AddButton(info)
+            end
+        end)
+        UIDropDownMenu_Show(dropdown, "cursor")
+    else
+        printMessage(" |cffFFD700GoblinFlip context menu:|r")
+        for index = 1, #menu do
+            printMenu = menu[index].text
+        end
+        -- Simpler approach: just print the options
+        printMessage(string.format("1: %s", menu[1].text))
+        printMessage(string.format("2: %s", menu[2].text))
+        printMessage(string.format("3: %s", menu[3].text))
+    end
+end
+
+--- Add GoblinFlip info line to an item tooltip.
+-- Called from GameTooltip hooks when an item is being shown.
+function App:AddTooltipInfo(tooltip)
+    if not settingValue("showFlipTooltip", false) then
+        return
+    end
+
+    if not self.selected then
+        -- Show general scan info instead of selected opportunity
+        local identity = self.identity
+        if identity and identity.house ~= GF.Domain.Market.HOUSE_UNKNOWN then
+            local scanInfo = string.format("%s %s |r", GF.L["Market"], identity.houseLabel or "")
+            -- Try to add a line with scan status
+            if type(tooltip) == "table" and tooltip.AddDoubleLine then
+                tooltip:AddDoubleLine(GF.L["GoblinFlip"], scanInfo, 1.0, 1.0, 1.0, 0.82, 0.82, 0.82)
+            end
+        end
+        return
+    end
+
+    -- Show selected opportunity info
+    local opportunity = self.selected
+    local profitText = GF.Util.FormatMoney(opportunity.profit or 0)
+    local roiText = opportunity.roi and string.format("%.1f%%", opportunity.roi / 10) or ""
+
+    local line = string.format("|cffFFD700GF: %s %s|r %s %s", GF.L["Flip"], opportunity.itemName or "", profitText, roiText)
+
+    if type(tooltip) == "table" and tooltip.AddDoubleLine then
+        tooltip:AddDoubleLine(GF.L["GoblinFlip"], line, 1.0, 1.0, 1.0, 0.82, 0.82, 0.82)
+    elseif type(tooltip) == "table" and tooltip.AddLine then
+        tooltip:AddLine(line, 1.0, 1.0, 1.0, true)
+    end
+end
+
+--- Hook GameTooltip to show GoblinFlip info when toggle is on.
+-- This runs after ADDON_LOADED and PLAYER_LOGIN.
+function App:HookTooltips()
+    if self.tooltipHooked then
+        return
+    end
+    self.tooltipHooked = true
+
+    -- Hook GameTooltip_SetDefaultAnchor if available
+    if type(GameTooltip_SetDefaultAnchor) == "function" then
+        -- We hook OnShow to add our info
+    end
+
+    -- Register for tooltip events via the frame script
+    local oldOnShow = GameTooltip:GetScript("OnShow")
+    GameTooltip:SetScript("OnShow", function(self2)
+        if oldOnShow then
+            oldOnShow(self2)
+        end
+        App:AddTooltipInfo(self2)
+    end)
+
+    -- Also hook ItemRefTooltip for item links
+    local oldItemRefOnShow = ItemRefTooltip:GetScript("OnShow")
+    ItemRefTooltip:SetScript("OnShow", function(self2)
+        if oldItemRefOnShow then
+            oldItemRefOnShow(self2)
+        end
+        App:AddTooltipInfo(self2)
+    end)
+
+    printMessage(GF.L["Tooltip integration enabled."])
+end
+
+--- Enable/disable the tooltip context menu toggle via settings.
+function App:ToggleContextMenu()
+    local current = settingValue("showFlipContextMenu", true)
+    GF.Settings.Set("showFlipContextMenu", not current)
+    notify("context_menu_toggle", not current)
+    return not current
+end
+
+--- Register tooltip-related events and hooks.
+function App:RegisterTooltipEvents()
+    if self.tooltipEventsRegistered then
+        return
+    end
+    self.tooltipEventsRegistered = true
+
+    -- We hook tooltips in the Initialize function after UI is ready
+    -- But register the slash command and setting changelisteners
+    if type(_G.SLASH_GOBLINFLIP1) ~= "nil" then
+        -- Slash command already registered, just ensure our handlers work
+    end
+
+    -- Listen for setting changes
+    self:After(1, function()
+        if GF.Settings then
+            -- Settings change handler would call notify events
+        end
+    end)
 end
