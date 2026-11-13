@@ -1,6 +1,6 @@
-# GoblinFlip v0.2
+# GoblinFlip v0.3
 
-[![Version](https://img.shields.io/badge/version-v0.2-blue.svg)](https://github.com/EvilSpaceGoblins/GoblinFlip/releases/tag/v0.2)
+[![Version](https://img.shields.io/badge/version-v0.3-blue.svg)](https://github.com/EvilSpaceGoblins/GoblinFlip/releases/tag/v0.3)
 [![WoW Version](https://img.shields.io/badge/WoW-Forever%201.60.1-orange.svg)]()
 [![TOC](https://img.shields.io/badge/TOC-16001-green.svg)]()
 [![Tests](https://img.shields.io/badge/tests-68%2F68%20passing-brightgreen.svg)]()
