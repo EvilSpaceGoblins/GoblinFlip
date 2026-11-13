@@ -5,7 +5,7 @@
 [![TOC](https://img.shields.io/badge/TOC-16001-green.svg)]()
 [![Tests](https://img.shields.io/badge/tests-68%2F68%20passing-brightgreen.svg)]()
 [![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
-[![Auctionator](https://img.shields.io/badge/Auctionator-Required-red.svg)](https://www.curseforge.com/wow/addons/auctioneer-forever)
+[![Auctionator](https://img.shields.io/badge/Auctionator-Optional-orange.svg)](https://www.curseforge.com/wow/addons/auctioneer-forever)
 [![DisenchantBuddy](https://img.shields.io/badge/DisenchantBuddy-Optional-yellow.svg)](https://www.curseforge.com/wow/addons/disenchantbuddy)
 [![Lua](https://img.shields.io/badge/Lua-5.4-blue.svg)]()
 
