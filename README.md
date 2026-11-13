@@ -5,8 +5,8 @@
 [![TOC](https://img.shields.io/badge/TOC-16001-green.svg)]()
 [![Tests](https://img.shields.io/badge/tests-68%2F68%20passing-brightgreen.svg)]()
 [![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
-[![Auctionator](https://img.shields.io/badge/Auctionator-Required-red.svg)]()
-[![DisenchantBuddy](https://img.shields.io/badge/DisenchantBuddy-Optional-yellow.svg)]()
+[![Auctionator](https://img.shields.io/badge/Auctionator-Required-red.svg)](https://www.curseforge.com/wow/addons/auctioneer-forever)
+[![DisenchantBuddy](https://img.shields.io/badge/DisenchantBuddy-Optional-yellow.svg)](https://www.curseforge.com/wow/addons/disenchantbuddy)
 [![Lua](https://img.shields.io/badge/Lua-5.4-blue.svg)]()
 
 ---
@@ -65,12 +65,12 @@ unzip GoblinFlip.zip -d "/Applications/World of Warcraft/_forever_/Interface/Add
 ```
 
 ### Requirements
-| Dependency | Required? | Purpose |
-|:---|:---:|:---|
-| **Auctionator** | ✅ Yes | Full-scan data source |
-| **DisenchantBuddy** | ⭕ Optional | Disenchant value estimates |
-| **LibStub** | 📦 Embedded | Library loader |
-| **LibAHTab** | 📦 Embedded | AH tab integration |
+| Dependency | Required? | Purpose | Download |
+|:---|:---:|:---|:---|
+| **Auctionator** | ✅ Yes | Full-scan data source | [CurseForge](https://www.curseforge.com/wow/addons/auctioneer-forever) |
+| **DisenchantBuddy** | ⭕ Optional | Disenchant value estimates | [CurseForge](https://www.curseforge.com/wow/addons/disenchantbuddy) |
+| **LibStub** | 📦 Embedded | Library loader | Included |
+| **LibAHTab** | 📦 Embedded | AH tab integration | Included |
 
 ---
 
@@ -256,9 +256,13 @@ No — Auctionator is required for scans. Native replicate scan is experimental 
 
 ## 🔗 Links
 
-- **Releases**: https://github.com/EvilSpaceGoblins/GoblinFlip/releases
-- **Issues**: https://github.com/EvilSpaceGoblins/GoblinFlip/issues
-- **Discord**: *Coming soon*
+| Resource | Link |
+|:---|:---|
+| **GoblinFlip Releases** | https://github.com/EvilSpaceGoblins/GoblinFlip/releases |
+| **Issues / Bug Reports** | https://github.com/EvilSpaceGoblins/GoblinFlip/issues |
+| **Auctionator (Required)** | https://www.curseforge.com/wow/addons/auctioneer-forever |
+| **DisenchantBuddy (Optional)** | https://www.curseforge.com/wow/addons/disenchantbuddy |
+| **Discord** | *Coming soon* |
 
 ---
 
