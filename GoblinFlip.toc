@@ -36,3 +36,13 @@ Adapters\Merchant.lua
 Settings.lua
 Events.lua
 SlashCommands.lua
+UI\Widgets.lua
+UI\Filters.lua
+UI\ResultsTable.lua
+UI\BuyPane.lua
+UI\Dashboard.lua
+UI\History.lua
+UI\LedgerView.lua
+UI\Options.lua
+UI\MainTab.lua
+UI\Standalone.lua
