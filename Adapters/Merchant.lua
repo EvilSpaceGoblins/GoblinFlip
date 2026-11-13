@@ -189,6 +189,42 @@ function GF.Merchant.IsOpen()
     return GF.Merchant.open
 end
 
+--- Record a vendor sale event.
+---@param itemId number
+---@param quantity number
+---@param price number
+function GF.Merchant.RecordVendorSale(itemId, quantity, price)
+    if not itemId or not quantity or not price then return end
+
+    local observation = {
+        at = nowOf(),
+        type = "vendor_sale",
+        itemId = itemId,
+        quantity = quantity,
+        price = price,
+        total = price * quantity,
+    }
+
+    -- Add to observations
+    local list = GF.Merchant.observations
+    list[#list + 1] = observation
+    while #list > GF.Merchant.maxObservations do
+        table.remove(list, 1)
+    end
+    GF.Merchant.lastSnapshot = observation
+
+    -- TODO: Link to ledger if this was a GoblinFlip purchase
+    -- GF.Domain.Ledger:RecordVendorSale(itemId, quantity, price)
+
+    if GF.Debug and GF.Debug.Log then
+        GF.Debug:Log("Vendor sale recorded:", itemId, quantity, price)
+    end
+end
+
+function GF.Merchant.IsOpen()
+    return GF.Merchant.open
+end
+
 function GF.Merchant.Clear()
     GF.Merchant.observations = {}
     GF.Merchant.lastSnapshot = nil
@@ -203,11 +239,11 @@ function GF.Merchant.Initialize()
 
     local frame = CreateFrame("Frame")
     GF.Merchant.frame = frame
-    local events = {"MERCHANT_SHOW", "MERCHANT_UPDATE", "MERCHANT_CLOSED"}
+    local events = {"MERCHANT_SHOW", "MERCHANT_UPDATE", "MERCHANT_CLOSED", "MERCHANT_CONFIRM_TRADE"}
     for index = 1, #events do
         pcall(frame.RegisterEvent, frame, events[index])
     end
-    frame:SetScript("OnEvent", function(_, event)
+    frame:SetScript("OnEvent", function(_, event, ...)
         if event == "MERCHANT_SHOW" then
             GF.Merchant.open = true
             GF.Merchant.moneyBefore = money()
@@ -216,6 +252,9 @@ function GF.Merchant.Initialize()
             if GF.Merchant.open then
                 GF.Merchant.Snapshot("update")
             end
+        elseif event == "MERCHANT_CONFIRM_TRADE" then
+            -- Item sold to vendor
+            GF.Merchant.RecordVendorSale(...)
         else
             if GF.Merchant.open then
                 GF.Merchant.Snapshot("closed")

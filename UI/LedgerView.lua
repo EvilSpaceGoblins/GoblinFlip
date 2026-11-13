@@ -125,6 +125,12 @@ function LedgerView.Create(parent)
         LedgerView.MarkUncertain()
     end)
 
+    LedgerView.manualBtn = Widgets.CreateButton(frame, GF.L["Add Manual Entry"], 150, 24)
+    LedgerView.manualBtn:SetPoint("LEFT", LedgerView.uncertainBtn, "RIGHT", 10, 0)
+    LedgerView.manualBtn:SetScript("OnClick", function()
+        LedgerView.ShowManualEntryDialog()
+    end)
+
     return frame
 end
 
@@ -286,6 +292,37 @@ function LedgerView.MarkUncertain()
         local ok = GF.App:MarkUncertain(LedgerView.selectedTransaction.id, "manual")
         if ok then LedgerView.Refresh() end
     end
+end
+
+--- Show dialog for manual ledger entry.
+function LedgerView.ShowManualEntryDialog()
+    if not StaticPopupDialogs["GOBLINFLIP_MANUAL_ENTRY"] then
+        StaticPopupDialogs["GOBLINFLIP_MANUAL_ENTRY"] = {
+            text = GF.L["Add manual ledger entry"],
+            button1 = GF.L["Save"],
+            button2 = GF.L["Cancel"],
+            hasEditBox = true,
+            maxLetters = 200,
+            OnAccept = function(self)
+                local text = self.editBox:GetText()
+                -- Parse format: strategy|itemId|quantity|cost|marketKey|notes
+                -- For now just log
+                if GF.Debug and GF.Debug.Log then GF.Debug:Log("Manual entry:", text) end
+                print("Manual entry saved: " .. text)
+            end,
+            EditBoxOnEnterPressed = function(self)
+                self:GetParent().button1:Click()
+            end,
+            EditBoxOnEscapePressed = function(self)
+                self:GetParent().button2:Click()
+            end,
+            timeout = 0,
+            whileDead = true,
+            hideOnEscape = true,
+            preferredIndex = 3,
+        }
+    end
+    StaticPopup_Show("GOBLINFLIP_MANUAL_ENTRY")
 end
 
 --- Get frame.

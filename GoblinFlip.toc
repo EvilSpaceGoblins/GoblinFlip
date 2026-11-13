@@ -12,6 +12,10 @@
 Libs\LibStub\LibStub.lua
 Libs\LibAHTab\LibAHTab.lua
 
+Libs\LibDBIcon\LibDBIcon.lua
+
+UI\MinimapIcon.lua
+
 Core.lua
 Compatibility.lua
 Localization.lua

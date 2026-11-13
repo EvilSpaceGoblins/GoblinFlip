@@ -388,6 +388,25 @@ function Ledger:RecordMailEvent(id, eventId)
     return true
 end
 
+--- Attempt to auto-match a mail item to pending transactions.
+--- Returns the transaction ID if matched, nil otherwise.
+function Ledger:AutoMatchMail(itemLink, quantity)
+    if not itemLink or not quantity then return nil end
+    local itemId = GF.Domain.ScanNormalizer.GetItemIdFromLink(itemLink)
+    if not itemId then return nil end
+
+    local transactions = self:List({ status = { "awaiting_mail", "confirmed" } })
+    for _, tx in ipairs(transactions) do
+        if tx.itemId == itemId and tx.receivedQuantity < tx.purchasedQuantity then
+            local remaining = tx.purchasedQuantity - tx.receivedQuantity
+            if remaining >= quantity then
+                return tx.id
+            end
+        end
+    end
+    return nil
+end
+
 function Ledger:Metrics(filter)
     local transactions = self:List(filter)
     local metrics = {

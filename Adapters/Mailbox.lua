@@ -158,7 +158,26 @@ function GF.Mailbox.Scan()
         unnamedAttachments = unnamedAttachments,
         fingerprint = fingerprintOf(items) .. "#" .. tostring(count) .. "#" .. tostring(totalMoney),
         automatic = false,
+        matchedTransactions = {},
     }
+
+    -- Auto-match mail items to ledger transactions
+    if GF.Domain and GF.Domain.Ledger then
+        for _, item in ipairs(items) do
+            if item.itemId and item.quantity then
+                local txId = GF.Domain.Ledger.AutoMatchMail(item.itemLink, item.quantity)
+                if txId then
+                    observation.matchedTransactions[#observation.matchedTransactions + 1] = {
+                        itemId = item.itemId,
+                        quantity = item.quantity,
+                        transactionId = txId,
+                    }
+                    -- Optionally auto-mark as received
+                    -- GF.Domain.Ledger:MarkReceived(txId, item.quantity, "mail_auto", nowOf())
+                end
+            end
+        end
+    end
 
     if observation.fingerprint ~= addon.lastFingerprint then
         addon.lastFingerprint = observation.fingerprint

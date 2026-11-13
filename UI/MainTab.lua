@@ -160,4 +160,7 @@ function MainTab.GetFrame()
     return MainTab.frame
 end
 
+-- Expose for Events.lua
+GF.UI.AttachToAuctionHouse = MainTab.Create
+
 return MainTab

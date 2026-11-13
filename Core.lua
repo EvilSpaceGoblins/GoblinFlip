@@ -358,3 +358,12 @@ end
 function GF.Debug:Clear()
     self.entries = {}
 end
+
+-- Optional Stubby integration for enhanced debugging
+GF.Stubby = nil
+if _G.Stubby then
+    GF.Stubby = _G.Stubby
+    if GF.Debug and GF.Debug.Log then GF.Debug:Log("Stubby detected, enhanced debugging available") end
+end
+
+return GF

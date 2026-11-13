@@ -236,6 +236,11 @@ function App:Initialize()
     end
     self:RegisterTooltipEvents()
 
+    -- Minimap icon
+    if GF.UI and GF.UI.MinimapIcon then
+        GF.UI.MinimapIcon.Initialize()
+    end
+
     self:BuildPurchaseManager()
     self:RegisterEvents()
     self:RegisterTicker()
