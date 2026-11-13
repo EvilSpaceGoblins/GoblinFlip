@@ -227,6 +227,9 @@ function App:Initialize()
     GF.Mailbox.Initialize()
     GF.Merchant.Initialize()
 
+    -- Dependency check
+    App:CheckDependencies()
+
     -- Tooltip and context menu integration (optional, settings-controlled)
     if settingValue("showFlipTooltip", false) == true then
         self:HookTooltips()
@@ -316,6 +319,8 @@ function App:HandleEvent(event, ...)
         if GF.UI and GF.UI.AttachToAuctionHouse then
             pcall(GF.UI.AttachToAuctionHouse)
         end
+        -- Re-check dependencies after AH opens (Auctionator may have loaded late)
+        App:After(1, function() App:CheckDependencies() end)
     elseif event == "AUCTION_HOUSE_CLOSED" then
         if self.purchase then
             self.purchase:OnAhClosed()
@@ -1272,6 +1277,46 @@ function App:GetStatusLine()
     return table.concat(parts, " | ")
 end
 
+--- Dependency check
+function App:CheckDependencies()
+    local missing = {}
+    local warnings = {}
+    
+    -- Auctionator (Required)
+    if not GF.AuctionatorAdapter.IsAvailable() then
+        table.insert(missing, "|cffff0000Auctionator|r (required for full scans)")
+    elseif not GF.AuctionatorAdapter.registered then
+        table.insert(warnings, "|cffffff00Auctionator|r loaded but scan events not registered")
+    end
+    
+    -- DisenchantBuddy (Optional)
+    if not GF.DisenchantBuddy.IsAvailable() then
+        table.insert(warnings, "|cff00ff00DisenchantBuddy|r (optional - disenchant estimates disabled)")
+    end
+    
+    -- LibAHTab (Embedded - always available)
+    local libAHTab = _G.LibStub and _G.LibStub:GetLibrary("LibAHTab-1-0", true)
+    if not libAHTab then
+        table.insert(missing, "|cffff0000LibAHTab|r (embedded - should never be missing)")
+    end
+    
+    -- Display results
+    if #missing > 0 then
+        printMessage("|cffff0000GoblinFlip: Missing dependencies:|r")
+        for _, m in ipairs(missing) do printMessage("  - " .. m) end
+        return false
+    end
+    
+    if #warnings > 0 then
+        printMessage("|cffffff00GoblinFlip: Optional dependencies:|r")
+        for _, w in ipairs(warnings) do printMessage("  - " .. w) end
+    end
+    
+    return true
+end
+
+
+
 --- Tooltip and context menu integration
 -- Toggles whether GoblinFlip shows info lines on item tooltips.
 function App:ToggleFlipTooltip()
@@ -1318,9 +1363,9 @@ function App:ShowFlipContextMenu()
                 if self.selected.itemLink then
                     local link = self.selected.itemLink
                     -- Use copying function if available
-                    local canCopy = CopyChatEdit and CopyChatEdit:GetEditedItem
-                    if canCopy then
-                        CopyChatEdit:GetEditedItem(link)
+                    local copyFunc = (CopyChatEdit and CopyChatEdit.GetEditedItem) or nil
+                    if copyFunc then
+                        copyFunc(CopyChatEdit, link)
                     else
                         printMessage(" |cffffd200" .. link .. "|r")
                     end

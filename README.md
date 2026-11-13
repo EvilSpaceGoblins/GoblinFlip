@@ -1,23 +1,33 @@
 # GoblinFlip v0.1
 
+[![Version](https://img.shields.io/badge/version-v0.1-blue.svg)](https://github.com/EvilSpaceGoblins/GoblinFlip/releases/tag/v0.1)
+[![WoW Version](https://img.shields.io/badge/WoW-Forever%201.60.1-orange.svg)]()
+[![TOC](https://img.shields.io/badge/TOC-16001-green.svg)]()
+[![Tests](https://img.shields.io/badge/tests-68%2F68%20passing-brightgreen.svg)]()
+[![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
+[![Dependencies](https://img.shields.io/badge/Auctionator-Required-red.svg)]()
+[![Dependencies](https://img.shields.io/badge/DisenchantBuddy-Optional-yellow.svg)]()
+
 ## What is GoblinFlip?
 
-**GoblinFlip** is a World of Warcraft: Forever (1.60.1) auction-house addon designed to help players find and purchase vendor flips and estimate disenchant flips at the auction house. It implements a complete workflow: **scan → discover → validate → buy → mail/merchant reconcile → ledger**.
+**GoblinFlip** is a World of Warcraft: Forever (1.60.1) auction-house addon designed to help players find and purchase **vendor flips** and estimate **disenchant flips** at the auction house. It implements a complete workflow: **scan → discover → validate → buy → mail/merchant reconcile → ledger**.
 
 **Target**: WoW Forever 1.60.1, TOC `16001`, EU/ENUS
 
 ## Core Features
 
 ### Vendor Flips
-- Detects items vendored by NPCs that can be flipped at the auction house
+- Detects items **listed by players on the Auction House** that can be purchased and sold to an NPC vendor for profit
 - Calculates exact profit using integer copper (gold/silver/copper)
-- Verified vendor prices from `C_Item.GetItemInfo` sell price
+- Verified vendor prices from `C_Item.GetItemInfo` sell price (exact, not estimated)
 
-### Disenchant Estimates
+### Disenchant Estimates (Transparent by Design)
 - Optional integration with **DisenchantBuddy** for expected material value
-- Treated as **estimates only**, never guaranteed sales
+- **Estimates are the correct approach** - disenchanting is inherently probabilistic (RNG). There is no "guaranteed" disenchant outcome.
+- Community-sourced averages from thousands of real disenchant results
+- Clearly marked with confidence: `medium` (fresh data) / `low` (stale) / `verified` (vendor)
 - Skill detection with manual override in settings
-- Confidence levels: `verified` / `estimated` / `low` (stale)
+- UI explicitly shows "Estimated" tag on disenchant opportunities
 
 ### Scan Workflow
 - **Auctionator scan**: Manual trigger (`Get All` button), adapter consumes `Auctionator.FullScan.Events.ScanComplete`
@@ -42,13 +52,14 @@
 - Sound alerts: opt-in, rate-limited (30s), deduplicated per scan
 - Grouped/ungrouped view, search, blacklist, quality filter
 - Debug logging, experimental native scan toggle
+- In-game dependency check with clear messaging
 
 ## What GoblinFlip Does NOT Do
 
 - ❌ **No botting/automation**: No auto-buy, auto-sell, or auto-mail
 - ❌ **No commodity direct buying**: Disabled by default (unverified price guarantee)
 - ❌ **No botting**: One submission at a time, explicit user confirmation required
-- ❌ **Guaranteed prices**: Disenchant values are estimates, vendor prices are verified
+- ❌ **Guaranteed disenchant outcomes**: Estimates are community averages - this is the correct approach since disenchanting is inherently RNG-based. Vendor prices are exact.
 - ❌ **Botting detection avoidance**: All API access is defensive and rate-aware
 - ❌ **Full automation**: Every purchase requires explicit user confirmation
 
@@ -65,7 +76,7 @@
 |---|---|---|
 | Auctionator | Required | Full-scan contract, undocumented event bus |
 | DisenchantBuddy | Optional | `GetAverageDisenchantValueByItemID` API |
-| LibStub | Embedded | MIT licensed, © 2022 plusmouse |
+| LibStub | Embedded | Public Domain |
 | LibAHTab | Embedded | MIT licensed, © 2022 plusmouse |
 
 ## Installation
