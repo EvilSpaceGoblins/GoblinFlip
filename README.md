@@ -233,11 +233,12 @@ luacheck GoblinFlip
 
 ## 🗺️ Roadmap
 
-| Version | Focus |
-|:---|:---|
-| **v0.2** | UI polish, advanced filters, ledger export |
-| **v0.3** | Tooltip enhancements, context menus, search |
-| **v1.0** | Stable, validated, documented, translated |
+| Version | Focus | Status |
+|:---|:---|:---|
+| **v0.1** | Core engine, scan pipeline, vendor/DE flips, ledger, standalone mode | ✅ Done |
+| **v0.2** | **UI Implementation** (Widgets, Filters, ResultsTable, BuyPane, Dashboard, History, LedgerView, Options, MainTab, Standalone), AuctionHouse tab via LibAHTab, slash commands | 🔄 Next |
+| **v0.3** | Tooltip enhancements, context menus, search, advanced filters, ledger export | 📋 Planned |
+| **v1.0** | Stable, validated, documented, translated | 📋 Planned |
 
 ---
 
@@ -300,8 +301,8 @@ Yes! Enable **Standalone Mode** in settings (`/gf settings standaloneMode true`)
 |:---|:---|
 | **GoblinFlip Releases** | https://github.com/EvilSpaceGoblins/GoblinFlip/releases |
 | **Issues / Bug Reports** | https://github.com/EvilSpaceGoblins/GoblinFlip/issues |
-| **Auctionator (Required)** | https://www.curseforge.com/wow/addons/auctioneer-forever |
-| **DisenchantBuddy (Optional)** | https://www.curseforge.com/wow/addons/disenchantbuddy |
+| **Auctionator (Optional — for faster scans)** | https://www.curseforge.com/wow/addons/auctioneer-forever |
+| **DisenchantBuddy (Optional — for DE estimates)** | https://www.curseforge.com/wow/addons/disenchantbuddy |
 | **Discord** | *Coming soon* |
 
 ---
