@@ -47,7 +47,8 @@ A World of Warcraft: **Forever (1.60.1)** auction-house addon that helps you fin
 | | History (7 days / 10 snapshots) | ✅ |
 | **UX** | In-game dependency check | ✅ |
 | | Sound alerts (opt-in, rate-limited) | ✅ |
-| | Tooltip & context menu integration | ✅ |
+| | Tooltip integration (vendor/DE breakdown) | ✅ |
+| | Context menus (right-click opportunities) | ✅ |
 | | **Standalone mode (zero dependencies)** | ✅ |
 
 ---
@@ -133,6 +134,10 @@ GoblinFlip includes a **Standalone Mode** that works completely without Auctiona
 | `/gf settings` | Open settings panel |
 | `/gf budget` | Reset session budget |
 | `/gf reset` | **⚠️ Wipes all data** |
+| `/gf standalone` | Toggle standalone window |
+| `/gf diagnostics` | Print diagnostics |
+| `/gf de` | Show disenchant status |
+| `/gf market` | Show current market info |
 
 ---
 
@@ -237,7 +242,7 @@ luacheck GoblinFlip
 |:---|:---|:---|
 | **v0.1** | Core engine, scan pipeline, vendor/DE flips, ledger, standalone mode | ✅ Done |
 | **v0.2** | **UI Implementation** (Widgets, Filters, ResultsTable, BuyPane, Dashboard, History, LedgerView, Options, MainTab, Standalone), AuctionHouse tab via LibAHTab, slash commands | ✅ Done |
-| **v0.3** | Tooltip enhancements, context menus, search, advanced filters, ledger export | 📋 Planned |
+| **v0.3** | Tooltip enhancements (vendor/DE breakdown on hover), context menus, enhanced search | ✅ Done |
 | **v1.0** | Stable, validated, documented, translated | 📋 Planned |
 
 ---

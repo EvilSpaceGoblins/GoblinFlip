@@ -33,6 +33,7 @@ local DEFAULTS = {
     experimentalNativeScan = false,
     allowCommodityPurchase = false,
     showFlipTooltip = false,
+    showFlipContextMenu = true,
     standaloneMode = false,
     cooldownHint = 900,
     soundFile = "Sound\\Interface\\AuctionWindowOpen.wav",
@@ -85,6 +86,7 @@ local BOOLEAN_KEYS = {
     experimentalNativeScan = true,
     allowCommodityPurchase = true,
     showFlipTooltip = true,
+    showFlipContextMenu = true,
     standaloneMode = true,
 }
 

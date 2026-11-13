@@ -137,6 +137,25 @@ function Options.CreateGeneralTab()
     end)
     y = y - 30
 
+    -- Tooltip Integration
+    Options.tooltipCheck = Widgets.CreateCheckButton(frame, GF.L["Show Flip Tooltip"], GF.L["Show GoblinFlip info on item tooltips (vendor price, DE estimate)"])
+    Options.tooltipCheck:SetPoint("TOPLEFT", 0, y)
+    Options.tooltipCheck:SetChecked(GF.Settings.Get("showFlipTooltip") == true)
+    Options.tooltipCheck:SetScript("OnClick", function(self)
+        GF.Settings.Set("showFlipTooltip", self:GetChecked())
+        if GF.UI and GF.UI.Tooltip then GF.UI.Tooltip.SetEnabled(self:GetChecked()) end
+    end)
+    y = y - 30
+
+    -- Context Menu
+    Options.contextMenuCheck = Widgets.CreateCheckButton(frame, GF.L["Show Flip Context Menu"], GF.L["Right-click opportunities for context menu"])
+    Options.contextMenuCheck:SetPoint("TOPLEFT", 0, y)
+    Options.contextMenuCheck:SetChecked(GF.Settings.Get("showFlipContextMenu") == true)
+    Options.contextMenuCheck:SetScript("OnClick", function(self)
+        GF.Settings.Set("showFlipContextMenu", self:GetChecked())
+    end)
+    y = y - 30
+
     -- Debug Logging
     Options.debugCheck = Widgets.CreateCheckButton(frame, GF.L["Debug Logging"], GF.L["Enable debug output to chat"])
     Options.debugCheck:SetPoint("TOPLEFT", 0, y)
@@ -489,6 +508,8 @@ function Options.Refresh()
     if w.quoteFreshnessBox then w.quoteFreshnessBox:SetText(tostring(GF.Settings.Get("quoteFreshness") or 10)) end
     if w.commodityCheck then w.commodityCheck:SetChecked(GF.Settings.Get("allowCommodityPurchase") == true) end
     if w.standaloneCheck then w.standaloneCheck:SetChecked(GF.Settings.Get("standaloneMode") == true) end
+    if w.tooltipCheck then w.tooltipCheck:SetChecked(GF.Settings.Get("showFlipTooltip") == true) end
+    if w.contextMenuCheck then w.contextMenuCheck:SetChecked(GF.Settings.Get("showFlipContextMenu") == true) end
     if w.debugCheck then w.debugCheck:SetChecked(GF.Settings.Get("debug") == true) end
 
     if w.providerDropdown then UIDropDownMenu_SetSelectedValue(w.providerDropdown, GF.Settings.Get("scanProvider") or "auctionator") end

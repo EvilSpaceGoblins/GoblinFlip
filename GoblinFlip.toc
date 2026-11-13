@@ -46,3 +46,4 @@ UI\LedgerView.lua
 UI\Options.lua
 UI\MainTab.lua
 UI\Standalone.lua
+UI\Tooltip.lua
