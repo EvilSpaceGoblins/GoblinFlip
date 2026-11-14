@@ -21,6 +21,8 @@ local COMMANDS = {
     help = {
         func = function()
             print("|cffFFD700GoblinFlip Commands:|r")
+            print("  /gf setup       - Resume setup")
+            print("  /gf health      - Check feature health")
             print("  /gf scan        - " .. GF.L["Start a new scan"])
             print("  /gf help        - " .. GF.L["Show this help"])
             print("  /gf settings    - " .. GF.L["Open settings panel"])
@@ -32,19 +34,21 @@ local COMMANDS = {
         help = GF.L["Show help"],
     },
     settings = {
-        func = function()
-            if GF.UI and GF.UI.Options and GF.UI.Options.GetFrame then
-                local frame = GF.UI.Options.GetFrame()
-                if frame then frame:Show() end
-            end
+        func = function(args)
+            local key, text = (args or ""):match("^(%S+)%s+(.+)$")
+            if key then
+                local value = text == "true" and true or text == "false" and false or tonumber(text) or text
+                if text == "false" then value = false end
+                GF.UI.SetSetting(key, value)
+            else GF.UI.Open("options") end
         end,
         help = GF.L["Open settings panel"],
     },
     budget = {
         func = function()
             if GF.App and GF.App.ResetSessionBudget then
-                GF.App:ResetSessionBudget()
-                print("|cff00ff00" .. GF.L["Session budget reset"] .. "|r")
+                local ok, reason = GF.App:ResetSessionBudget()
+                if ok == false then GF.Util.Print(reason) else GF.Util.Print(GF.L["Session budget reset"]) end
             end
         end,
         help = GF.L["Reset session budget"],
@@ -111,10 +115,15 @@ function Slash.Initialize()
     _G.SLASH_GOBLINFLIP1 = "/gf"
     _G.SLASH_GOBLINFLIP2 = "/goblinflip"
 
-    _G.hash_SlashCmdList["GOBLINFLIP"] = function(msg)
-        msg = msg and msg:lower():trim() or ""
+    _G.SlashCmdList = _G.SlashCmdList or {}
+    _G.SlashCmdList["GOBLINFLIP"] = function(msg)
+        msg = GF.Util.Trim(msg or "")
         local cmd, args = msg:match("^(%S+)%s*(.*)$")
-        cmd = cmd or "help"
+        cmd = cmd and cmd:lower() or "open"
+
+        if cmd == "open" then GF.UI.Open(); return end
+        if cmd == "setup" then GF.UI.Onboarding.Show(); return end
+        if cmd == "health" then GF.App:CheckDependencies(); GF.UI.Open("health"); return end
 
         local handler = COMMANDS[cmd]
         if handler and handler.func then
@@ -132,8 +141,8 @@ function Slash.Initialize()
         button2 = GF.L["No"],
         OnAccept = function()
             if GF.App and GF.App.ResetAllData then
-                GF.App:ResetAllData()
-                print("|cff00ff00" .. GF.L["All data reset"] .. "|r")
+                local ok, reason = GF.App:ResetAllData()
+                if ok == false then GF.Util.Print(reason) else GF.Util.Print(GF.L["All data reset"]) end
             end
         end,
         timeout = 0,
@@ -142,7 +151,6 @@ function Slash.Initialize()
         preferredIndex = 3,
     }
 
-    print("|cff00ff00GoblinFlip|r slash commands loaded. Type /gf help")
 end
 
 --- Get command help text.

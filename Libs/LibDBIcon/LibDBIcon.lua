@@ -11,7 +11,7 @@ lib.callbacks = lib.callbacks or LibStub:GetLibrary("CallbackHandler-1.0"):New(l
 lib.notCreated = lib.notCreated or {}
 
 local function GetMinimapShape()
-    local shape = GetMinimapShape and GetMinimapShape() or "ROUND"
+    local shape = _G.GetMinimapShape and _G.GetMinimapShape() or "ROUND"
     return shape
 end
 
@@ -22,12 +22,14 @@ local function UpdatePosition(button, db)
     local shape = GetMinimapShape()
     if shape == "SQUARE" then
         local mx, my = math.abs(x), math.abs(y)
-        if mx > my then y = y * mx / my else x = x * mx / my end
+        local scale = math.max(mx, my)
+        if scale > 0 then x, y = x / scale, y / scale end
     end
     button:SetPoint("CENTER", Minimap, "CENTER", radius * x, radius * y)
 end
 
 local function OnDragStart(self)
+    if self.db.lock then return end
     self:LockHighlight()
     self:SetScript("OnUpdate", function(self)
         local mx, my = Minimap:GetCenter()
@@ -51,6 +53,11 @@ local function OnDragStop(self)
 end
 
 local function OnEnter(self)
+    if self.object.OnTooltipShow then
+        GameTooltip:SetOwner(self, "ANCHOR_LEFT")
+        self.object.OnTooltipShow(GameTooltip)
+        GameTooltip:Show()
+    end
     if self.tooltip then
         GameTooltip:SetOwner(self, "ANCHOR_LEFT")
         GameTooltip:SetText(self.tooltip, 1, 1, 1)
@@ -65,6 +72,7 @@ local function OnLeave(self)
 end
 
 local function OnClick(self, button)
+    if self.object.OnClick then self.object.OnClick(self, button) end
     lib.callbacks:Fire("LibDBIcon_OnClick", self.name, button)
 end
 

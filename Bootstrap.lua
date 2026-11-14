@@ -1,0 +1,3 @@
+-- Loaded last: all modules exist before the first addon event.
+local _, GF = ...
+GF.App:RegisterEvents()

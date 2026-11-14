@@ -14,15 +14,11 @@ local function expectedNetPerItem(data)
     local value = data.expectedNetPerItem
     if value == nil then
         local gross = data.expectedGrossPerItem
-        if gross == nil then
+        if not GF.Util.IsFiniteNumber(gross) or gross < 0 then
             return nil
         end
-        local feeRate = tonumber(data.saleFeeRate) or 0
-        if feeRate < 0 then
-            feeRate = 0
-        elseif feeRate > 1 then
-            feeRate = 1
-        end
+        local feeRate = data.saleFeeRate == nil and 0 or tonumber(data.saleFeeRate)
+        if not GF.Util.IsFiniteNumber(feeRate) or feeRate < 0 or feeRate > 1 then return nil end
         value = gross * (1 - feeRate)
     end
     if type(value) ~= "number" or value ~= value or value == math.huge or value < 0 then
@@ -56,6 +52,8 @@ function Disenchant.Evaluate(listing, context)
     if listing.ownAuction == true then
         return nil, "own_auction"
     end
+    if listing.classId and listing.classId ~= 2 and listing.classId ~= 4 then return nil, "not_disenchantable" end
+    if listing.itemQuality and (listing.itemQuality < 2 or listing.itemQuality > 4) then return nil, "not_disenchantable" end
 
     if context.requireSkill ~= false then
         if data.skillVerified == false then
@@ -71,14 +69,13 @@ function Disenchant.Evaluate(listing, context)
         return nil, "value_unavailable"
     end
 
-    local otherCostPerItem = tonumber(data.otherCostPerItem) or 0
-    if otherCostPerItem < 0 then
-        otherCostPerItem = 0
-    end
+    local otherCostPerItem = data.otherCostPerItem == nil and 0 or tonumber(data.otherCostPerItem)
+    if not GF.Util.IsFiniteNumber(otherCostPerItem) or otherCostPerItem < 0 then return nil, "invalid_cost" end
 
     local expectedGross = netPerItem * quantity
     local otherCosts = otherCostPerItem * quantity
     local expectedNet = expectedGross - otherCosts
+    if not GF.Util.IsFiniteNumber(expectedNet) or math.abs(expectedNet) > GF.MAX_COPPER then return nil, "invalid_proceeds" end
     local expectedProfit = expectedNet - buyoutTotal
     if expectedProfit <= 0 then
         return nil, "not_profitable"

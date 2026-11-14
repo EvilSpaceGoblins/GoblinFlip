@@ -42,6 +42,7 @@ function Vendor.Evaluate(listing, context)
     end
 
     local proceeds = quantity * vendorUnit
+    if not GF.Util.IsCopper(proceeds) then return nil, "invalid_proceeds" end
     local profit = proceeds - buyoutTotal
     if profit <= 0 then
         return nil, "not_profitable"

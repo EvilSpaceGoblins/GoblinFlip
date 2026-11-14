@@ -26,11 +26,12 @@ local function readItemInfo(identifier)
     if not item or type(item.GetItemInfo) ~= "function" then
         return nil
     end
-    local ok, info = pcall(item.GetItemInfo, identifier)
+    local function capture(...) return {n = select("#", ...), ...} end
+    local ok, values = pcall(function() return capture(item.GetItemInfo(identifier)) end)
     if not ok then
         return nil
     end
-    return info
+    return (unpack or table.unpack)(values, 1, values.n)
 end
 
 function GF.ItemInfo.Initialize()
@@ -132,6 +133,9 @@ function GF.ItemInfo:ResolveOne(itemId, variantKey, itemLink)
         sellPrice = sellPrice,
         name = name,
         quality = quality,
+        itemLevel = values[4],
+        classId = values[12],
+        subClassId = values[13],
         icon = icon,
         itemLink = resolvedLink,
         source = "C_Item.GetItemInfo",
@@ -196,7 +200,11 @@ function GF.ItemInfo:FinishResolve(timedOut)
     if resolver and type(resolver.callback) == "function" then
         local stats = self:GetStats()
         stats.timedOut = timedOut == true
-        pcall(resolver.callback, resolver.token, stats)
+        local ok, err = pcall(resolver.callback, resolver.token, stats)
+        if not ok then
+            GF.Util.Print("Item resolution: " .. tostring(err))
+            if GF.App then GF.App:OnScanError("item_resolution_failed") end
+        end
     end
 end
 

@@ -32,6 +32,8 @@ local ALLOWED_TRANSITIONS = {
     },
     [STATUS.PARTIALLY_RECEIVED] = {
         [STATUS.RECEIVED] = true,
+        [STATUS.PARTIALLY_DISPOSED] = true,
+        [STATUS.DISPOSED] = true,
         [STATUS.UNCERTAIN] = true,
     },
     [STATUS.RECEIVED] = {
@@ -135,13 +137,19 @@ function Ledger:Create(data, now)
     if not GF.Util.IsCopper(data.purchasedCost) then
         return nil, "invalid_cost"
     end
-    if data.expectedProceeds ~= nil and (type(data.expectedProceeds) ~= "number" or data.expectedProceeds < 0) then
+    if data.expectedProceeds ~= nil and (not GF.Util.IsFiniteNumber(data.expectedProceeds) or data.expectedProceeds < 0 or data.expectedProceeds > GF.MAX_COPPER) then
         return nil, "invalid_expected_proceeds"
     end
     if type(data.marketKey) ~= "string" or data.marketKey == "" then
         return nil, "invalid_market"
     end
 
+    if data.itemId ~= nil and (not GF.Util.IsInteger(data.itemId) or data.itemId <= 0) then return nil, "invalid_item" end
+    for _, key in ipairs({"receivedQuantity", "disposedQuantity", "realizedProceeds", "allocatedCost"}) do
+        if data[key] ~= nil and not GF.Util.IsCopper(data[key]) then return nil, "invalid_" .. key end
+    end
+    if (data.receivedQuantity or 0) > data.purchasedQuantity or (data.disposedQuantity or 0) > (data.receivedQuantity or 0)
+        or (data.allocatedCost or 0) > data.purchasedCost then return nil, "invalid_totals" end
     now = now or self.now()
     local transaction = {
         id = data.id or self.idFactory("tx"),
@@ -252,22 +260,19 @@ function Ledger:MarkReceived(id, quantity, eventId, now)
     if not GF.Util.IsInteger(quantity) or quantity <= 0 then
         return 0, "invalid_quantity"
     end
-    if eventId then
-        if transaction.processedEvents[eventId] then
-            return 0, "duplicate"
-        end
-        transaction.processedEvents[eventId] = true
-    end
+    if eventId and transaction.processedEvents[eventId] then return 0, "duplicate" end
     if transaction.status == STATUS.SUBMITTED or transaction.status == STATUS.FAILED
-        or transaction.status == STATUS.CANCELLED then
+        or transaction.status == STATUS.CANCELLED or transaction.status == STATUS.UNCERTAIN then
         return 0, "invalid_state"
     end
 
     local remaining = transaction.purchasedQuantity - transaction.receivedQuantity
+    if quantity > remaining then return 0, "exceeds_purchased" end
     local delta = math.min(quantity, math.max(0, remaining))
     if delta <= 0 then
         return 0, "nothing_to_receive"
     end
+    if eventId then transaction.processedEvents[eventId] = true end
     transaction.receivedQuantity = transaction.receivedQuantity + delta
     local newStatus = resolveStatusForReceipt(transaction.receivedQuantity, transaction.purchasedQuantity)
     if newStatus ~= transaction.status then
@@ -290,7 +295,7 @@ function Ledger:AllocateCost(transaction, quantity)
     if quantity >= remainingUnits then
         return math.max(0, transaction.purchasedCost - transaction.allocatedCost)
     end
-    local allocation = math.floor(transaction.purchasedCost * quantity / transaction.purchasedQuantity)
+    local allocation = GF.Util.AllocateCopper(transaction.purchasedCost, quantity, transaction.purchasedQuantity)
     local maxAllocation = transaction.purchasedCost - transaction.allocatedCost
     if allocation > maxAllocation then
         allocation = maxAllocation
@@ -309,12 +314,8 @@ function Ledger:AddProceeds(id, amount, quantity, eventId, now)
     if not GF.Util.IsInteger(quantity) or quantity <= 0 then
         return nil, "invalid_quantity"
     end
-    if eventId then
-        if transaction.processedEvents[eventId] then
-            return nil, "duplicate"
-        end
-        transaction.processedEvents[eventId] = true
-    end
+    if eventId and transaction.processedEvents[eventId] then return nil, "duplicate" end
+    if transaction.status == STATUS.UNCERTAIN or transaction.status == STATUS.FAILED or transaction.status == STATUS.CANCELLED then return nil, "invalid_state" end
     if transaction.receivedQuantity <= 0 then
         return nil, "not_received"
     end
@@ -323,6 +324,8 @@ function Ledger:AddProceeds(id, amount, quantity, eventId, now)
         return nil, "exceeds_received"
     end
 
+    if not GF.Util.IsCopper(transaction.realizedProceeds + amount) then return nil, "invalid_amount" end
+    if eventId then transaction.processedEvents[eventId] = true end
     local allocation = self:AllocateCost(transaction, quantity)
     local record = {
         quantity = quantity,
@@ -357,22 +360,22 @@ function Ledger:ReverseLastDisposal(id, refundAmount, now)
     if not transaction then
         return nil, "not_found"
     end
-    local record = table.remove(transaction.disposals)
+    local record = transaction.disposals[#transaction.disposals]
     if not record then
         return nil, "no_disposal"
     end
-    transaction.disposedQuantity = math.max(0, transaction.disposedQuantity - record.quantity)
-    transaction.allocatedCost = math.max(0, transaction.allocatedCost - record.allocatedCost)
     local refund = refundAmount or record.proceeds
-    if not GF.Util.IsCopper(refund) then
+    if not GF.Util.IsCopper(refund) or refund ~= record.proceeds then
         return nil, "invalid_amount"
     end
+    table.remove(transaction.disposals)
+    transaction.disposedQuantity = math.max(0, transaction.disposedQuantity - record.quantity)
+    transaction.allocatedCost = math.max(0, transaction.allocatedCost - record.allocatedCost)
     transaction.realizedProceeds = math.max(0, transaction.realizedProceeds - refund)
     transaction.updatedAt = now or self.now()
     transaction.reversal = true
-    if transaction.status == STATUS.DISPOSED then
-        transaction.status = STATUS.PARTIALLY_DISPOSED
-    end
+    transaction.status = transaction.disposedQuantity > 0 and STATUS.PARTIALLY_DISPOSED
+        or (transaction.receivedQuantity >= transaction.purchasedQuantity and STATUS.RECEIVED or STATUS.PARTIALLY_RECEIVED)
     return record, nil
 end
 
@@ -510,16 +513,20 @@ function Ledger:Load(data)
     for index = 1, #data do
         local transaction = data[index]
         if type(transaction) == "table" and transaction.id and not self.byId[transaction.id] then
-            transaction.disposals = transaction.disposals or {}
-            transaction.processedEvents = transaction.processedEvents or {}
-            transaction.mailEventIds = transaction.mailEventIds or {}
-            transaction.receivedQuantity = transaction.receivedQuantity or 0
-            transaction.disposedQuantity = transaction.disposedQuantity or 0
-            transaction.realizedProceeds = transaction.realizedProceeds or 0
-            transaction.allocatedCost = transaction.allocatedCost or 0
-            self.transactions[#self.transactions + 1] = transaction
-            self.byId[transaction.id] = transaction
-            loaded = loaded + 1
+            local copy = GF.Util.DeepCopy(transaction)
+            copy.disposals = type(copy.disposals) == "table" and copy.disposals or {}
+            copy.processedEvents = type(copy.processedEvents) == "table" and copy.processedEvents or {}
+            copy.mailEventIds = type(copy.mailEventIds) == "table" and copy.mailEventIds or {}
+            copy.createdAt = GF.Util.IsFiniteNumber(copy.createdAt) and copy.createdAt or 0
+            local valid = type(copy.id) == "string"
+            for _, disposal in ipairs(copy.disposals) do
+                valid = valid and type(disposal) == "table" and GF.Util.IsCopper(disposal.proceeds)
+                    and GF.Util.IsInteger(disposal.quantity) and disposal.quantity > 0 and GF.Util.IsCopper(disposal.allocatedCost)
+            end
+            if valid then
+                local created = self:Create(copy, copy.createdAt)
+                if created then created.budgetCounted = copy.budgetCounted == true; loaded = loaded + 1 end
+            end
         end
     end
     table.sort(self.transactions, function(left, right)

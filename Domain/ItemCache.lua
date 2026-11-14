@@ -42,6 +42,9 @@ function ItemCache:Set(itemId, variantKey, info, now)
         sellPrice = info.sellPrice,
         name = info.name or existing.name,
         quality = info.quality or existing.quality,
+        itemLevel = info.itemLevel or existing.itemLevel,
+        classId = info.classId or existing.classId,
+        subClassId = info.subClassId or existing.subClassId,
         icon = info.icon or existing.icon,
         itemLink = info.itemLink or existing.itemLink,
         resolvedAt = now or self.now(),
@@ -128,6 +131,9 @@ function ItemCache:Apply(listing)
     end
     listing.itemName = entry.name
     listing.itemQuality = entry.quality
+    listing.itemLevel = entry.itemLevel or listing.itemLevel
+    listing.classId = entry.classId
+    listing.subClassId = entry.subClassId
     listing.itemIcon = entry.icon
     if not listing.itemLink and entry.itemLink then
         listing.itemLink = entry.itemLink

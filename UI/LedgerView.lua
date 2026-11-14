@@ -1,334 +1,129 @@
--- UI Ledger View: transaction history and P&L tracking.
-
 local _, GF = ...
-
-GF.UI = GF.UI or {}
-GF.UI.LedgerView = {}
-
-local LedgerView = GF.UI.LedgerView
-local Widgets = GF.UI.Widgets
-
-LedgerView.frame = nil
-LedgerView.selectedTransaction = nil
-LedgerView.filter = {}
-
---- Create the ledger view panel.
----@param parent Frame
----@return Frame
-function LedgerView.Create(parent)
-    if LedgerView.frame then return LedgerView.frame end
-
-    local frame = CreateFrame("Frame", "GoblinFlipLedgerView", parent)
-    frame:SetSize(800, 500)
-    LedgerView.frame = frame
-
-    local y = -10
-
-    -- Title
-    LedgerView.title = Widgets.CreateFontString(frame, GF.L["Ledger"], "GameFontNormalLarge")
-    LedgerView.title:SetPoint("TOP", 0, y)
-    y = y - 30
-
-    -- Summary metrics
-    LedgerView.summary = Widgets.CreateFontString(frame, "", "GameFontHighlightSmall")
-    LedgerView.summary:SetPoint("TOPLEFT", 20, y)
-    LedgerView.summary:SetWidth(760)
-    LedgerView.summary:SetJustifyH("LEFT")
-    y = y - 50
-
-    -- Separator
-    Widgets.CreateSeparator(frame):SetPoint("TOPLEFT", 15, y):SetPoint("TOPRIGHT", -15, y)
-    y = y - 10
-
-    -- Filter row
-    LedgerView.filterLabel = Widgets.CreateFontString(frame, GF.L["Filters"], "GameFontNormal")
-    LedgerView.filterLabel:SetPoint("TOPLEFT", 20, y)
-    y = y - 18
-
-    -- Status filter
-    local statusItems = {
-        { value = "", text = GF.L["All"] },
-        { value = "submitted", text = GF.L["Submitted"] },
-        { value = "confirmed", text = GF.L["Confirmed"] },
-        { value = "awaiting_mail", text = GF.L["Awaiting Mail"] },
-        { value = "received", text = GF.L["Received"] },
-        { value = "disposed", text = GF.L["Disposed"] },
-        { value = "failed", text = GF.L["Failed"] },
-    }
-    LedgerView.statusDropdown = Widgets.CreateDropdown(frame, 150, statusItems, function(value)
-        LedgerView.filter.status = value ~= "" and value or nil
-        LedgerView.Refresh()
-    end)
-    LedgerView.statusDropdown:SetPoint("TOPLEFT", 0, y)
-
-    -- Strategy filter
-    local strategyItems = {
-        { value = "", text = GF.L["All"] },
-        { value = "vendor", text = GF.L["Vendor"] },
-        { value = "disenchant", text = GF.L["Disenchant"] },
-    }
-    LedgerView.strategyDropdown = Widgets.CreateDropdown(frame, 150, strategyItems, function(value)
-        LedgerView.filter.strategy = value ~= "" and value or nil
-        LedgerView.Refresh()
-    end)
-    LedgerView.strategyDropdown:SetPoint("LEFT", LedgerView.statusDropdown, "RIGHT", 10, 0)
-
-    -- Market filter
-    LedgerView.marketDropdown = Widgets.CreateDropdown(frame, 200, {}, function(value)
-        LedgerView.filter.marketKey = value ~= "" and value or nil
-        LedgerView.Refresh()
-    end)
-    LedgerView.marketDropdown:SetPoint("LEFT", LedgerView.strategyDropdown, "RIGHT", 10, 0)
-
-    -- Reset filter
-    LedgerView.resetFilterBtn = Widgets.CreateButton(frame, GF.L["Reset"], 80, 22)
-    LedgerView.resetFilterBtn:SetPoint("LEFT", LedgerView.marketDropdown, "RIGHT", 10, 0)
-    LedgerView.resetFilterBtn:SetScript("OnClick", function()
-        LedgerView.filter = {}
-        LedgerView.Refresh()
-    end)
-
-    y = y - 35
-
-    -- Separator
-    Widgets.CreateSeparator(frame):SetPoint("TOPLEFT", 15, y):SetPoint("TOPRIGHT", -15, y)
-    y = y - 10
-
-    -- Transaction table
-    local scroll, content = Widgets.CreateScrollFrame(frame, 770, 350)
-    scroll:SetPoint("TOPLEFT", 15, y)
-    LedgerView.scrollFrame = scroll
-    LedgerView.content = content
-
-    y = y - 360
-
-    -- Separator
-    Widgets.CreateSeparator(frame):SetPoint("TOPLEFT", 15, y):SetPoint("TOPRIGHT", -15, y)
-    y = y - 10
-
-    -- Action buttons
-    LedgerView.receiveBtn = Widgets.CreateButton(frame, GF.L["Mark Received"], 150, 24)
-    LedgerView.receiveBtn:SetPoint("BOTTOMLEFT", 15, 15)
-    LedgerView.receiveBtn:SetScript("OnClick", function()
-        LedgerView.MarkReceived()
-    end)
-
-    LedgerView.disposeBtn = Widgets.CreateButton(frame, GF.L["Add Proceeds"], 150, 24)
-    LedgerView.disposeBtn:SetPoint("LEFT", LedgerView.receiveBtn, "RIGHT", 10, 0)
-    LedgerView.disposeBtn:SetScript("OnClick", function()
-        LedgerView.AddProceeds()
-    end)
-
-    LedgerView.uncertainBtn = Widgets.CreateButton(frame, GF.L["Mark Uncertain"], 150, 24)
-    LedgerView.uncertainBtn:SetPoint("LEFT", LedgerView.disposeBtn, "RIGHT", 10, 0)
-    LedgerView.uncertainBtn:SetScript("OnClick", function()
-        LedgerView.MarkUncertain()
-    end)
-
-    LedgerView.manualBtn = Widgets.CreateButton(frame, GF.L["Add Manual Entry"], 150, 24)
-    LedgerView.manualBtn:SetPoint("LEFT", LedgerView.uncertainBtn, "RIGHT", 10, 0)
-    LedgerView.manualBtn:SetScript("OnClick", function()
-        LedgerView.ShowManualEntryDialog()
-    end)
-
-    return frame
+local Ledger, W = {rows = {}}, GF.UI.Widgets
+GF.UI.LedgerView = Ledger
+local function selected()
+    local tx = Ledger.selectedId and GF.App.ledger:Get(Ledger.selectedId)
+    if not tx then GF.Util.Print(GF.L["Select a transaction first."]) end
+    return tx
 end
-
---- Refresh market filter dropdown.
-function LedgerView.RefreshMarkets()
-    if not LedgerView.frame then return end
-    local transactions = GF.App and GF.App.GetLedgerTransactions and GF.App:GetLedgerTransactions({})
-    if not transactions then return end
-
-    local markets = {}
-    for _, tx in ipairs(transactions) do
-        if tx.marketKey and not markets[tx.marketKey] then
-            markets[tx.marketKey] = true
+local function prompt(title, initial, callback)
+    if GF.Settings.readOnly then GF.Util.Print("Saved data is read-only."); return end
+    StaticPopupDialogs.GOBLINFLIP_LEDGER_INPUT = {
+        text = title, button1 = GF.L["Save"], button2 = GF.L["Cancel"], hasEditBox = true,
+        timeout = 0, whileDead = true, hideOnEscape = true,
+        OnShow = function(self) self.editBox:SetText(initial or ""); self.editBox:SetFocus() end,
+        OnAccept = function(self) callback(self.editBox:GetText()) end,
+    }
+    StaticPopup_Show("GOBLINFLIP_LEDGER_INPUT")
+end
+local function confirm(title, callback)
+    if GF.Settings.readOnly then GF.Util.Print("Saved data is read-only."); return end
+    StaticPopupDialogs.GOBLINFLIP_LEDGER_CONFIRM = {
+        text = title, button1 = GF.L["Confirm"], button2 = GF.L["Cancel"], timeout = 0,
+        whileDead = true, hideOnEscape = true, OnAccept = callback,
+    }
+    StaticPopup_Show("GOBLINFLIP_LEDGER_CONFIRM")
+end
+function Ledger.Create(parent)
+    local f = CreateFrame("Frame", nil, parent)
+    Ledger.frame = f
+    Ledger.summary = W.CreateFontString(f, "", "GameFontHighlightSmall")
+    Ledger.summary:SetPoint("TOPLEFT", 5, -5)
+    Ledger.summary:SetPoint("TOPRIGHT", -5, -5)
+    Ledger.summary:SetJustifyH("LEFT")
+    local actions = {
+        {"Received", function()
+            local tx = selected(); if not tx then return end
+            prompt("Quantity actually received for " .. (tx.itemName or tostring(tx.itemId)), tostring(tx.purchasedQuantity - tx.receivedQuantity), function(text)
+                local quantity = tonumber(text)
+                if not GF.Util.IsInteger(quantity) or quantity <= 0 then GF.Util.Print("Enter a positive whole quantity."); return end
+                GF.UI.Action(GF.App.MarkReceived, GF.App, tx.id, quantity); Ledger.Refresh()
+            end)
+        end},
+        {"Add proceeds", function()
+            local tx = selected(); if not tx then return end
+            prompt("Actual total proceeds | quantity (example: 1g 20s|2)", "", function(text)
+                local amount, qty = text:match("^(.-)|(%d+)$")
+                local copper, reason = GF.Util.ParseMoney(amount)
+                if not copper then GF.Util.Print(reason); return end
+                GF.UI.Action(GF.App.AddProceeds, GF.App, tx.id, copper, tonumber(qty)); Ledger.Refresh()
+            end)
+        end},
+        {"Verify bought", function()
+            local tx = selected(); if not tx then return end
+            confirm("I verified this purchase in-game: " .. (tx.itemName or tostring(tx.itemId)) .. ". Charge " .. W.FormatMoney(tx.purchasedCost) .. " to budget?", function()
+                GF.UI.Action(GF.App.ResolveTransaction, GF.App, tx.id, true); Ledger.Refresh()
+            end)
+        end},
+        {"Verify failed", function()
+            local tx = selected(); if not tx then return end
+            confirm("I verified this purchase failed and no gold was spent. Release its pending status?", function()
+                GF.UI.Action(GF.App.ResolveTransaction, GF.App, tx.id, false); Ledger.Refresh()
+            end)
+        end},
+        {"Reverse disposal", function()
+            local tx = selected(); if not tx then return end
+            confirm("Reverse the last recorded disposal after verifying a full buyback/refund?", function()
+                local result, reason = GF.App.ledger:ReverseLastDisposal(tx.id)
+                if not result then GF.Util.Print(reason) end
+                GF.App:Save(); Ledger.Refresh()
+            end)
+        end},
+        {"Manual entry", function() Ledger.ShowManualEntryDialog() end},
+    }
+    for i, action in ipairs(actions) do
+        local b = W.CreateButton(f, GF.L[action[1]], 145, 26)
+        b:SetPoint("TOPLEFT", ((i - 1) % 3) * 150 + 5, -65 - math.floor((i - 1) / 3) * 30)
+        b:SetScript("OnClick", action[2])
+    end
+    Ledger.scroll, Ledger.content = W.CreateScrollFrame(f)
+    Ledger.scroll:SetPoint("TOPLEFT", 5, -135)
+    Ledger.scroll:SetPoint("BOTTOMRIGHT", -25, 5)
+    Ledger.content:SetWidth(950)
+    Ledger.scroll:SetScript("OnVerticalScroll", function(self, offset) self:SetVerticalScroll(offset); Ledger.Refresh() end)
+    return f
+end
+function Ledger.Refresh()
+    if not Ledger.frame then return end
+    local m = GF.App:GetLedgerMetrics()
+    Ledger.summary:SetText(string.format("%d transactions | Confirmed cost %s | Proceeds %s | Realized profit %s\nUncertain %s | Selected: %s | Mail/merchant observations: %d / %d",
+        m.transactions, W.FormatMoney(m.confirmedSpend), W.FormatMoney(m.realizedProceeds), W.FormatMoney(m.realizedProfit),
+        W.FormatMoney(m.uncertainSpend), Ledger.selectedId or "none", #GF.Mailbox.observations, #GF.Merchant.observations))
+    local data = GF.App:GetLedgerTransactions({})
+    data = GF.Util.SortStable(data, function(a, b) return (a.createdAt or 0) > (b.createdAt or 0) end)
+    local offset = math.floor((Ledger.scroll:GetVerticalScroll() or 0) / 28)
+    local count = math.max(1, math.ceil(Ledger.scroll:GetHeight() / 28) + 1)
+    for i = 1, count do
+        local row = Ledger.rows[i]
+        if not row then
+            row = W.CreateButton(Ledger.content, "", 940, 26)
+            row:SetScript("OnClick", function(self) Ledger.selectedId = self.tx.id; Ledger.Refresh() end)
+            Ledger.rows[i] = row
         end
-    end
-
-    local items = { { value = "", text = GF.L["All Markets"] } }
-    for mk in pairs(markets) do
-        table.insert(items, { value = mk, text = mk })
-    end
-    table.sort(items, function(a, b) return a.text < b.text end)
-
-    LedgerView.marketDropdown = Widgets.CreateDropdown(LedgerView.frame, 200, items, function(value)
-        LedgerView.filter.marketKey = value ~= "" and value or nil
-        LedgerView.Refresh()
-    end)
-    LedgerView.marketDropdown:SetPoint("LEFT", LedgerView.strategyDropdown, "RIGHT", 10, 0)
-    UIDropDownMenu_SetSelectedValue(LedgerView.marketDropdown, LedgerView.filter.marketKey or "")
-end
-
---- Refresh the transaction table.
-function LedgerView.Refresh()
-    if not LedgerView.frame then return end
-    LedgerView.RefreshMarkets()
-
-    local transactions = GF.App and GF.App.GetLedgerTransactions and GF.App:GetLedgerTransactions(LedgerView.filter)
-    local metrics = GF.App and GF.App.GetLedgerMetrics and GF.App:GetLedgerMetrics()
-
-    -- Update summary
-    if metrics then
-        local summary = string.format(
-            "%s: %d | %s: %s | %s: %s | %s: %s | %s: %s",
-            GF.L["Transactions"], metrics.totalTransactions or 0,
-            GF.L["Invested"], Widgets.FormatMoney(metrics.totalInvested or 0),
-            GF.L["Proceeds"], Widgets.FormatMoney(metrics.totalProceeds or 0),
-            GF.L["Realized Profit"], Widgets.FormatMoney(metrics.realizedProfit or 0),
-            GF.L["Pending"], metrics.pendingCount or 0
-        )
-        LedgerView.summary:SetText(summary)
-    end
-
-    -- Sort transactions by time descending
-    table.sort(transactions, function(a, b) return (a.submittedAt or 0) > (b.submittedAt or 0) end)
-
-    -- Create/update rows
-    local maxRows = math.floor(LedgerView.scrollFrame:GetHeight() / 22)
-    for i = 1, maxRows do
-        local tx = transactions[i]
-        local row = LedgerView.GetOrCreateRow(i)
+        row:ClearAllPoints(); row:SetPoint("TOPLEFT", 0, -(offset + i - 1) * 28)
+        local tx = data[offset + i]
+        row:SetShown(tx ~= nil)
         if tx then
-            row.transaction = tx
-            local dateStr = date("%m-%d %H:%M", tx.submittedAt or 0)
-            local statusColor = {
-                submitted = "|cffffff00",
-                confirmed = "|cff00ff00",
-                awaiting_mail = "|cff00ffff",
-                received = "|cff80ff80",
-                partially_disposed = "|cffff8000",
-                disposed = "|cff00ff00",
-                failed = "|cffff0000",
-                uncertain = "|cffff8000",
-            }
-            local status = tx.status or "?"
-            local statusText = (statusColor[status] or "|cffffffff") .. status .. "|r"
-            local strategyText = tx.strategy == "vendor" and GF.L["Vendor"] or GF.L["DE"]
-            local text = string.format(
-                "%s | %s | %s | %s | %s | %s",
-                dateStr,
-                statusText,
-                strategyText,
-                tx.itemName or ("#" .. tostring(tx.itemId)),
-                Widgets.FormatMoney(tx.purchasedCost or 0),
-                Widgets.FormatMoney(tx.realizedProfit or 0)
-            )
-            row.text:SetText(text)
-            row:Show()
-        else
-            row:Hide()
+            row.tx = tx
+            row:SetText(string.format("%s%s | %s | %s | %d/%d received | %s cost | %s profit",
+                tx.id == Ledger.selectedId and "> " or "", date("%m-%d %H:%M", tx.createdAt or 0), tx.status,
+                tx.itemName or tostring(tx.itemId), tx.receivedQuantity, tx.purchasedQuantity,
+                W.FormatMoney(tx.purchasedCost), W.FormatMoney(tx.realizedProceeds - tx.allocatedCost)))
         end
     end
+    for i = count + 1, #Ledger.rows do Ledger.rows[i]:Hide() end
+    Ledger.content:SetHeight(math.max(#data * 28, Ledger.scroll:GetHeight()))
 end
-
---- Get or create transaction row.
----@param index number
----@return Frame
-function LedgerView.GetOrCreateRow(index)
-    if LedgerView.rows and LedgerView.rows[index] then return LedgerView.rows[index] end
-
-    if not LedgerView.rows then LedgerView.rows = {} end
-
-    local row = CreateFrame("Button", nil, LedgerView.content)
-    row:SetHeight(20)
-    row:SetPoint("TOPLEFT", 0, -(index - 1) * 22)
-    row:SetPoint("TOPRIGHT", 0, -(index - 1) * 22)
-    row:RegisterForClicks("LeftButtonUp")
-
-    row.highlight = row:CreateTexture(nil, "HIGHLIGHT")
-    row.highlight:SetAllPoints()
-    row.highlight:SetColorTexture(1, 1, 1, 0.1)
-
-    row.selectedTex = row:CreateTexture(nil, "BACKGROUND")
-    row.selectedTex:SetAllPoints()
-    row.selectedTex:SetColorTexture(0.2, 0.5, 0.8, 0.4)
-    row.selectedTex:Hide()
-
-    row.text = row:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
-    row.text:SetPoint("LEFT", 10, 0)
-    row.text:SetJustifyH("LEFT")
-
-    row:SetScript("OnClick", function(self)
-        LedgerView.selectedTransaction = self.transaction
-        for _, r in pairs(LedgerView.rows) do
-            if r == self then r.selectedTex:Show() else r.selectedTex:Hide() end
-        end
+function Ledger.ShowManualEntryDialog()
+    prompt("strategy|itemID|quantity|cost (example: vendor|123|2|1g)", "", function(text)
+        local strategy, item, qty, amount = text:match("^(%a+)|(%d+)|(%d+)|(.+)$")
+        local copper, reason = GF.Util.ParseMoney(amount)
+        if not copper then GF.Util.Print(reason); return end
+        local tx, err = GF.App.ledger:Create({strategy = strategy, itemId = tonumber(item), purchasedQuantity = tonumber(qty),
+            purchasedCost = copper, marketKey = GF.App:GetMarketKey(), characterKey = GF.Settings.GetCharacterKey(),
+            status = GF.TX_STATUS.RECEIVED, receivedQuantity = tonumber(qty), manual = true, source = "manual"})
+        if not tx then GF.Util.Print(err); return end
+        GF.App:Save(); Ledger.Refresh()
     end)
-
-    LedgerView.rows[index] = row
-    return row
 end
-
---- Mark selected transaction as received.
-function LedgerView.MarkReceived()
-    if not LedgerView.selectedTransaction then
-        print(GF.L["No transaction selected"])
-        return
-    end
-    if GF.App and GF.App.MarkReceived then
-        local ok = GF.App:MarkReceived(LedgerView.selectedTransaction.id)
-        if ok then LedgerView.Refresh() end
-    end
-end
-
---- Add proceeds to selected transaction.
-function LedgerView.AddProceeds()
-    if not LedgerView.selectedTransaction then
-        print(GF.L["No transaction selected"])
-        return
-    end
-    print(GF.L["Not yet implemented"])
-end
-
---- Mark selected transaction as uncertain.
-function LedgerView.MarkUncertain()
-    if not LedgerView.selectedTransaction then
-        print(GF.L["No transaction selected"])
-        return
-    end
-    if GF.App and GF.App.MarkUncertain then
-        local ok = GF.App:MarkUncertain(LedgerView.selectedTransaction.id, "manual")
-        if ok then LedgerView.Refresh() end
-    end
-end
-
---- Show dialog for manual ledger entry.
-function LedgerView.ShowManualEntryDialog()
-    if not StaticPopupDialogs["GOBLINFLIP_MANUAL_ENTRY"] then
-        StaticPopupDialogs["GOBLINFLIP_MANUAL_ENTRY"] = {
-            text = GF.L["Add manual ledger entry"],
-            button1 = GF.L["Save"],
-            button2 = GF.L["Cancel"],
-            hasEditBox = true,
-            maxLetters = 200,
-            OnAccept = function(self)
-                local text = self.editBox:GetText()
-                -- Parse format: strategy|itemId|quantity|cost|marketKey|notes
-                -- For now just log
-                if GF.Debug and GF.Debug.Log then GF.Debug:Log("Manual entry:", text) end
-                print("Manual entry saved: " .. text)
-            end,
-            EditBoxOnEnterPressed = function(self)
-                self:GetParent().button1:Click()
-            end,
-            EditBoxOnEscapePressed = function(self)
-                self:GetParent().button2:Click()
-            end,
-            timeout = 0,
-            whileDead = true,
-            hideOnEscape = true,
-            preferredIndex = 3,
-        }
-    end
-    StaticPopup_Show("GOBLINFLIP_MANUAL_ENTRY")
-end
-
---- Get frame.
----@return Frame|nil
-function LedgerView.GetFrame()
-    return LedgerView.frame
-end
-
-return LedgerView
+function Ledger.GetFrame() return Ledger.frame end

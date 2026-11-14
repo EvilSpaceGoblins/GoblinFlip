@@ -23,7 +23,7 @@ function Tooltip.Initialize()
     Tooltip.HookTooltip(ShoppingTooltip1)
     Tooltip.HookTooltip(ShoppingTooltip2)
 
-    print("|cff00ff00GoblinFlip:|r Tooltip integration enabled")
+
 end
 
 --- Hook a tooltip frame.
@@ -32,9 +32,14 @@ function Tooltip.HookTooltip(tip)
     if not tip or tip.GoblinFlipHooked then return end
     tip.GoblinFlipHooked = true
 
-    tip:HookScript("OnTooltipSetItem", function(self)
-        Tooltip.OnTooltipSetItem(self)
-    end)
+    if TooltipDataProcessor and Enum and Enum.TooltipDataType then
+        if not Tooltip.processorHooked then
+            Tooltip.processorHooked = true
+            TooltipDataProcessor.AddTooltipPostCall(Enum.TooltipDataType.Item, function(self) Tooltip.OnTooltipSetItem(self) end)
+        end
+    else
+        pcall(tip.HookScript, tip, "OnTooltipSetItem", function(self) Tooltip.OnTooltipSetItem(self) end)
+    end
 
     tip:HookScript("OnHide", function(self)
         Tooltip.lastItem = nil
@@ -117,6 +122,7 @@ function Tooltip.GetDisenchantEstimate(itemId, link)
     -- Fallback to internal data
     if GF.Domain and GF.Domain.DisenchantData then
         -- Need item level and quality from link
+        if not C_Item or not C_Item.GetItemInfo then return end
         local _, _, quality, itemLevel = C_Item.GetItemInfo(link)
         if quality and quality >= 2 and quality <= 4 and itemLevel then
             local data = GF.Domain.DisenchantData.GetEstimate(itemId, itemLevel, quality)
@@ -147,11 +153,13 @@ function Tooltip.AddLines(tip, vendorPrice, deData, link)
     end
 
     -- Disenchant estimate
-    if deData and deData.available and deData.expectedNetPerItem then
+    if deData and deData.available and (deData.expectedNetPerItem or deData.expectedGrossPerItem) then
+        local net = deData.expectedNetPerItem or (deData.expectedGrossPerItem * (1 - (deData.saleFeeRate or 0)))
         if not added then tip:AddLine(" ") end
+        if deData.illustrative then tip:AddLine("Illustrative prices — not a live opportunity", 1, 0.6, 0) end
         local label = deData.source == "DisenchantBuddy" and "DB" or "Int"
         tip:AddLine("|cffFFD700GoblinFlip:|r " .. string.format(GF.L["Tooltip: Disenchant estimate"], label))
-        tip:AddDoubleLine("  " .. GF.L["Avg value"], Widgets.FormatMoney(deData.expectedNetPerItem), 1, 1, 1, 1, 1, 1)
+        tip:AddDoubleLine("  " .. GF.L["Avg value"], Widgets.FormatMoney(net), 1, 1, 1, 1, 1, 1)
         if deData.expectedGrossPerItem then
             tip:AddDoubleLine("  " .. GF.L["Gross (pre-fee)"], Widgets.FormatMoney(deData.expectedGrossPerItem), 0.8, 0.8, 0.8, 0.8, 0.8, 0.8)
         end

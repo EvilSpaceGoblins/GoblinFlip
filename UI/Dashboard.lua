@@ -43,7 +43,9 @@ function Dashboard.Create(parent)
     y = y - 30
 
     -- Separator
-    Widgets.CreateSeparator(frame).SetPoint("TOPLEFT", 15, y).SetPoint("TOPRIGHT", -15, y)
+    local separator = Widgets.CreateSeparator(frame)
+    separator:SetPoint("TOPLEFT", 15, y)
+    separator:SetPoint("TOPRIGHT", -15, y)
     y = y - 15
 
     -- Quick Actions
@@ -84,7 +86,9 @@ function Dashboard.Create(parent)
     y = y - 45
 
     -- Separator
-    Widgets.CreateSeparator(frame).SetPoint("TOPLEFT", 15, y).SetPoint("TOPRIGHT", -15, y)
+    local separator = Widgets.CreateSeparator(frame)
+    separator:SetPoint("TOPLEFT", 15, y)
+    separator:SetPoint("TOPRIGHT", -15, y)
     y = y - 15
 
     -- Ledger summary

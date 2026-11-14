@@ -231,16 +231,31 @@ function OpportunityIndex:LoadSerialized(data)
         return 0
     end
     local loaded = 0
+    local function cleanRows(rows)
+        local result = {}
+        if type(rows) ~= "table" then return result end
+        for _, row in ipairs(rows) do
+            if type(row) == "table" and GF.Util.IsInteger(row.itemId) and GF.Util.IsInteger(row.quantity) and row.quantity > 0
+                and GF.Util.IsCopper(row.buyoutTotal) and row.buyoutTotal > 0 and GF.Util.IsFiniteNumber(row.profit)
+                and GF.Util.IsFiniteNumber(row.roi) and GF.Util.IsFiniteNumber(row.expectedProceeds) then
+                local copy = GF.Util.DeepCopy(row)
+                copy.itemName = type(copy.itemName) == "string" and copy.itemName or ("Item #" .. copy.itemId)
+                result[#result + 1] = copy
+            end
+        end
+        return result
+    end
     for marketKey, snapshots in pairs(data) do
-        if type(snapshots) == "table" then
+        if type(marketKey) == "string" and type(snapshots) == "table" then
             local list = {}
             for index = 1, #snapshots do
                 local snapshot = snapshots[index]
-                if type(snapshot) == "table" and snapshot.observedAt then
-                    snapshot.marketKey = snapshot.marketKey or marketKey
-                    snapshot.opportunities = snapshot.opportunities or {}
-                    snapshot.disenchant = snapshot.disenchant or {}
-                    snapshot.metrics = snapshot.metrics or {}
+                if type(snapshot) == "table" and GF.Util.IsFiniteNumber(snapshot.observedAt) and type(snapshot.id) == "string" then
+                    snapshot = GF.Util.DeepCopy(snapshot)
+                    snapshot.marketKey = marketKey
+                    snapshot.opportunities = cleanRows(snapshot.opportunities)
+                    snapshot.disenchant = cleanRows(snapshot.disenchant)
+                    snapshot.metrics = type(snapshot.metrics) == "table" and snapshot.metrics or {}
                     snapshot.vendorSignatures, snapshot.vendorSignatureCount =
                         buildSignatureSet(snapshot.opportunities)
                     snapshot.disenchantSignatures, snapshot.disenchantSignatureCount =

@@ -95,7 +95,7 @@ function MinimapIcon.BuildTooltip(tt)
     end
     tt:AddDoubleLine("Vendor Flips:", vendorCount, 1, 1, 1, 1, 1, 1)
     tt:AddDoubleLine("DE Estimates:", deCount, 1, 1, 1, 1, 1, 1)
-    tt:AddDoubleLine("Avg ROI:", string.format("%.1f%%", metrics.avgRoi or 0), 1, 1, 1, 1, 1, 1)
+    tt:AddDoubleLine("Avg ROI:", string.format("%.1f%%", metrics.roi or 0), 1, 1, 1, 1, 1, 1)
 
     if budget > 0 then
         local remaining = budget - spent
@@ -125,7 +125,7 @@ function MinimapIcon.ShowDropdown()
         { text = "Scan", notCheckable = true, func = function() if GF.App and GF.App.RequestScan then GF.App:RequestScan() end end },
         { text = "Ledger", notCheckable = true, func = function() MinimapIcon.ShowLedger() end },
         { text = "History", notCheckable = true, func = function() MinimapIcon.ShowHistory() end },
-        { text = "Settings", notCheckable = true, func = function() if GF.UI.Options and GF.UI.Options.GetFrame then GF.UI.Options.GetFrame():Show() end end },
+        { text = "Settings", notCheckable = true, func = function() GF.UI.Open("options") end },
         { text = " ", disabled = true, notCheckable = true },
         { text = "Standalone Mode", checked = function() return GF.Settings.Get("standaloneMode") end, func = function()
             GF.Settings.Set("standaloneMode", not GF.Settings.Get("standaloneMode"))
@@ -147,16 +147,17 @@ function MinimapIcon.ShowDropdown()
     }
 
     -- Use UIDropDownMenu
-    local dropdown = CreateFrame("Frame", "GoblinFlipMinimapDropdown", UIParent, "UIDropDownMenuTemplate")
+    local dropdown = MinimapIcon.dropdown or CreateFrame("Frame", "GoblinFlipMinimapDropdown", UIParent, "UIDropDownMenuTemplate")
+    MinimapIcon.dropdown = dropdown
     UIDropDownMenu_Initialize(dropdown, function(self, level)
         for _, item in ipairs(menu) do
             local info = UIDropDownMenu_CreateInfo()
             info.text = item.text
             info.isTitle = item.isTitle
             info.disabled = item.disabled
-            info.notCheckable = item.notCheckable ~= false
+            info.notCheckable = item.checked == nil
             if item.checked then
-                info.checked = type(item.checked) == "function" and item.checked() or item.checked
+                if type(item.checked) == "function" then info.checked = item.checked() else info.checked = item.checked end
                 info.isNotRadio = true
             end
             info.func = item.func
@@ -165,46 +166,12 @@ function MinimapIcon.ShowDropdown()
     end)
 
     -- Show at cursor
-    UIDropDownMenu_Show(dropdown, "cursor")
+    ToggleDropDownMenu(1, nil, dropdown, "cursor", 0, 0)
 end
 
-function MinimapIcon.ToggleMainWindow()
-    -- Try AH tab first
-    if GF.UI.MainTab and GF.UI.MainTab.IsCreated and GF.UI.MainTab:IsCreated() then
-        local libAHTab = LibStub:GetLibrary("LibAHTab-1.0", true)
-        if libAHTab and libAHTab.GetButton then
-            local btn = libAHTab:GetButton(GF.UI.MainTab.tabId)
-            if btn then btn:Click() return end
-        end
-    end
-
-    -- Fallback to standalone window
-    if GF.UI.Standalone then
-        GF.UI.Standalone.Toggle()
-    end
-end
-
-function MinimapIcon.ShowLedger()
-    -- Try to show ledger view in AH tab
-    if GF.UI.MainTab and GF.UI.MainTab.IsCreated and GF.UI.MainTab:IsCreated() then
-        local libAHTab = LibStub:GetLibrary("LibAHTab-1.0", true)
-        if libAHTab and libAHTab.GetButton then
-            local btn = libAHTab:GetButton(GF.UI.MainTab.tabId)
-            if btn then btn:Click() end
-        end
-        -- TODO: Switch to ledger tab if we have sub-tabs
-    end
-    if GF.UI.Standalone and GF.UI.Standalone.IsVisible then
-        GF.UI.Standalone.Show()
-        -- TODO: Switch to ledger view
-    end
-end
-
-function MinimapIcon.ShowHistory()
-    if GF.UI.Standalone then
-        GF.UI.Standalone.Show()
-    end
-end
+function MinimapIcon.ToggleMainWindow() GF.UI.Standalone.Toggle() end
+function MinimapIcon.ShowLedger() GF.UI.Open("ledger") end
+function MinimapIcon.ShowHistory() GF.UI.Open("history") end
 
 function MinimapIcon.IsVisible()
     if MinimapIcon.icon then

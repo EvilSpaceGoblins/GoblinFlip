@@ -90,7 +90,8 @@ function App:RunTimers(now)
     end
     self.timers = keep
     for index = 1, #due do
-        pcall(due[index])
+        local ok, err = pcall(due[index])
+        if not ok then GF.Util.Print("Scheduled action: " .. tostring(err)); self:OnScanError("scheduled_action_failed") end
     end
 end
 
@@ -152,6 +153,13 @@ function App:BuildPurchaseManager()
         getMarketKey = function()
             return App:GetMarketKey()
         end,
+        validateQuote = function(quote)
+            if not App.ahOpen or GF.Settings.readOnly or App.recoveryBlocked then return false, "trading_unavailable" end
+            local filters = GF.Settings.GetFilters()
+            if quote.profit < filters.minProfit or quote.roi < filters.minRoi then return false, "profit_filters" end
+            if quote.strategy == GF.STRATEGY_DISENCHANT and not settingValue("disenchantEnabled", true) then return false, "disenchant_disabled" end
+            return true
+        end,
         query = function(listing, generation)
             return GF.LiveMarket:RequestOffers(listing, generation, function(queryGeneration, offers, info)
                 App.purchase:OnQueryResults(queryGeneration, offers, info)
@@ -190,10 +198,8 @@ function App:Initialize()
     if self.initialized then
         return
     end
-    self.initialized = true
-
     local saved = self:EnsureDatabase()
-    GF.Settings.Initialize(saved)
+    saved = GF.Settings.Initialize(saved)
     GF.Compat.Probe()
     GF.Debug.enabled = settingValue("debug", false) == true
 
@@ -226,15 +232,14 @@ function App:Initialize()
     GF.DisenchantBuddy.Initialize()
     GF.Mailbox.Initialize()
     GF.Merchant.Initialize()
+    GF.Mailbox.SetListener(function(observation) App.lastMailObservation = observation; notify("observations") end)
+    GF.Merchant.SetListener(function(observation) App.lastMerchantObservation = observation; notify("observations") end)
 
     -- Dependency check
     App:CheckDependencies()
 
     -- Tooltip and context menu integration (optional, settings-controlled)
-    if settingValue("showFlipTooltip", false) == true then
-        self:HookTooltips()
-    end
-    self:RegisterTooltipEvents()
+    GF.UI.Tooltip.SetEnabled(settingValue("showFlipTooltip", false) == true)
 
     -- Minimap icon
     if GF.UI and GF.UI.MinimapIcon then
@@ -251,6 +256,8 @@ function App:Initialize()
     self:RegisterTicker()
 
     saved.lastMarket = self.identity and self.identity.key or nil
+    self:RecoverPendingPurchases()
+    self.initialized = true
     notify("initialized")
 end
 
@@ -305,7 +312,8 @@ function App:RegisterEvents()
         pcall(frame.RegisterEvent, frame, events[index])
     end
     frame:SetScript("OnEvent", function(_, event, ...)
-        App:HandleEvent(event, ...)
+        local ok, err = pcall(App.HandleEvent, App, event, ...)
+        if not ok then GF.Util.Print("Error during " .. event .. ": " .. tostring(err)) end
     end)
 end
 
@@ -314,6 +322,8 @@ function App:HandleEvent(event, ...)
         local name = ...
         if name == GF.name then
             self:Initialize()
+        elseif self.initialized and (name == "Auctionator" or name == "DisenchantBuddy" or name == "Blizzard_AuctionHouseUI") then
+            self:CheckDependencies()
         end
     elseif event == "PLAYER_LOGIN" then
         self:Initialize()
@@ -324,33 +334,42 @@ function App:HandleEvent(event, ...)
             end
         end
         self:ReportReadiness()
+        if GF.UI.Onboarding and not GF.Settings.readOnly then GF.UI.Onboarding.MaybeShow() end
     elseif event == "PLAYER_LOGOUT" then
         self:Save()
     elseif event == "AUCTION_HOUSE_SHOW" then
+        self.ahOpen = true
+        self:CheckDependencies()
         self:DetectMarket(true)
         -- Legacy event fallback
         if GF.UI and GF.UI.AttachToAuctionHouse then
-            pcall(GF.UI.AttachToAuctionHouse)
+            if settingValue("standaloneMode", false) then GF.UI.Standalone.Show() else GF.UI.AttachToAuctionHouse() end
         end
         -- Re-check dependencies after AH opens (Auctionator may have loaded late)
         App:After(1, function() App:CheckDependencies() end)
     elseif event == "PLAYER_INTERACTION_MANAGER_FRAME_SHOW" then
         -- Modern interaction system (Forever/Retail)
         local interactionType = ...
-        if interactionType == Enum.PlayerInteractionType.Auctioneer then
+        if Enum and Enum.PlayerInteractionType and interactionType == Enum.PlayerInteractionType.Auctioneer then
+            self.ahOpen = true
+            self:CheckDependencies()
             self:DetectMarket(true)
             if GF.UI and GF.UI.AttachToAuctionHouse then
-                pcall(GF.UI.AttachToAuctionHouse)
+                if settingValue("standaloneMode", false) then GF.UI.Standalone.Show() else GF.UI.AttachToAuctionHouse() end
             end
             App:After(1, function() App:CheckDependencies() end)
         end
     elseif event == "AUCTION_HOUSE_CLOSED" then
+        self.ahOpen = false
+        self:CancelScan("ah_closed")
         if self.purchase then
             self.purchase:OnAhClosed()
         end
     elseif event == "PLAYER_INTERACTION_MANAGER_FRAME_HIDE" then
         local interactionType = ...
-        if interactionType == Enum.PlayerInteractionType.Auctioneer then
+        if Enum and Enum.PlayerInteractionType and interactionType == Enum.PlayerInteractionType.Auctioneer then
+            self.ahOpen = false
+            self:CancelScan("ah_closed")
             if self.purchase then
                 self.purchase:OnAhClosed()
             end
@@ -365,23 +384,12 @@ function App:HandleEvent(event, ...)
 end
 
 function App:ReportReadiness()
-    local report = GF.Compat.GetReport()
-    if not report.canQueryLive then
-        printMessage(GF.L["This client does not expose the modern auction house APIs."])
-        return
-    end
-    if not report.auctionator.contractAvailable then
-        printMessage(GF.L["Auctionator is missing. GoblinFlip needs Auctionator for full scans."])
-    end
-    local identity = self.identity
-    if identity and not identity.verified then
-        printMessage(GF.L["Market unknown - select a house override in Settings."])
-    end
-    printMessage(GF.L["GoblinFlip is ready."])
+    if GF.Settings.readOnly then printMessage("Saved data is newer or invalid; trading and saving are disabled.") end
 end
 
 function App:Save()
-    local saved = self:EnsureDatabase()
+    if GF.Settings.readOnly then return end
+    local saved = GF.Settings.db or self:EnsureDatabase()
     if self.index then
         saved.history = saved.history or {}
         saved.history.snapshots = self.index:Serialize(tonumber(settingValue("historySnapshots", 10)) or 10)
@@ -399,18 +407,23 @@ end
 --- Scan trigger used by the UI and slash commands.
 function App:RequestScan()
     self:Initialize()
+    if GF.Settings.readOnly then return false, "read_only" end
+    if not self.ahOpen then return false, "ah_closed" end
+    if self.scanning or self.scanState == STATE.REQUESTED then return false, "scan_pending" end
+    self:CheckDependencies()
+    self:DetectMarket()
+    local allowed, marketReason = self:CanPublishScans()
+    if not allowed then return false, marketReason end
+    self.requestedMarketKey = self:GetMarketKey()
     local currentSettings = settings()
     local provider = settingValue("scanProvider", "auctionator")
-    
+
     -- In standalone mode, always use native scan
-    if currentSettings.standaloneMode == true then
-        provider = "native"
-    end
-    
+    -- Window mode and scan provider are independent.
+
     if provider == "native" then
         -- Allow native scan in standalone mode without experimental flag
-        local allowNative = settingValue("experimentalNativeScan", false) == true
-            or currentSettings.standaloneMode == true
+        local allowNative = provider == "native"
         if not allowNative then
             return false, "native_scan_disabled"
         end
@@ -467,7 +480,8 @@ end
 --- Entry point for scan providers (Auctionator adapter and native adapter).
 function App:OnScanPayload(payload, source, observedAt)
     self:Initialize()
-    if type(payload) ~= "table" or #payload == 0 then
+    if GF.Settings.readOnly then return false, "read_only" end
+    if type(payload) ~= "table" then
         self:OnScanError("empty_payload")
         return false
     end
@@ -534,9 +548,10 @@ function App:OnScanPayload(payload, source, observedAt)
 end
 
 function App:CancelScan(reason)
-    if not self.scanning then
+    if not self.scanning and self.scanState ~= STATE.REQUESTED and not GF.NativeScan.requestedAt then
         return false
     end
+    GF.NativeScan:Cancel()
     self.scanning = false
     self.scanGeneration = (self.scanGeneration or 0) + 1
     self.batch = nil
@@ -550,7 +565,8 @@ function App:FinishNormalize(batch)
     local scanId = self.scanId
     local listings = batch:GetListings()
     if #listings == 0 then
-        self:CompleteScan(batch:GetResult(), {}, {evaluated = 0, profitable = 0}, 0)
+        self.lastResult = {resolved = 0, unknown = 0, disenchantCounts = {evaluated = 0, profitable = 0}, duration = 0}
+        self:CompleteScan(batch:GetResult(), {}, {})
         return
     end
     self:SetScanState(STATE.RESOLVING_ITEMS, 1, nil)
@@ -565,17 +581,22 @@ end
 
 function App:BuildDisenchantData(itemId, itemLevel, quality, force)
     local currentSettings = settings()
-    
+
     -- Use standalone internal data if enabled or if DisenchantBuddy unavailable
-    local useStandalone = currentSettings.standaloneMode == true
-        or not GF.DisenchantBuddy.IsAvailable()
-    
+    local useStandalone = not GF.DisenchantBuddy.IsAvailable()
+
     if useStandalone and GF.Domain.DisenchantData then
         -- Get material prices from live AH if available, otherwise use defaults
         local materialPrices = GF.Domain.DisenchantData.defaultPrices
-        return GF.Domain.DisenchantData.GetEstimate(itemId, itemLevel or 0, quality or 0, materialPrices)
+        local estimate = GF.Domain.DisenchantData.GetEstimate(itemId, itemLevel or 0, quality or 0, materialPrices)
+        if estimate then
+            estimate.skillVerified = GF.DisenchantBuddy.GetSkillStatus(force).verified
+            estimate.stale = true
+            estimate.illustrative = true
+        end
+        return estimate
     end
-    
+
     -- Fall back to DisenchantBuddy
     if not GF.DisenchantBuddy.IsAvailable() then
         return nil, "disenchantbuddy_unavailable"
@@ -805,6 +826,7 @@ function App:ValidateSelection()
     end
     self.selected = nil
     self.selectedKey = nil
+    if self.purchase then self.purchase:Cancel("selection_changed") end
 end
 
 function App:SetStrategy(strategy)
@@ -818,6 +840,8 @@ function App:SetStrategy(strategy)
     notify("filters")
     return true
 end
+
+function App:GetStrategy() return self.strategy end
 
 function App:SetSearch(text)
     local value = type(text) == "string" and text or ""
@@ -864,6 +888,10 @@ function App:SetSetting(key, value)
         GF.DisenchantBuddy.ClearCache()
     elseif key == "quoteFreshness" and self.purchase then
         self.purchase.options.quoteFreshness = value
+    elseif key == "scanProvider" then
+        self:CheckDependencies()
+    elseif key == "showFlipTooltip" then
+        GF.UI.Tooltip.SetEnabled(value)
     end
     notify("settings", key)
     self:Save()
@@ -934,10 +962,9 @@ function App:GetDisenchantStatus()
         or not GF.DisenchantBuddy.IsAvailable()
     local data = {
         available = GF.DisenchantBuddy.IsAvailable() or useStandalone,
-        provider = useStandalone and "Internal (Standalone)" or "DisenchantBuddy",
+        provider = useStandalone and "Internal (illustrative prices; buying disabled)" or "DisenchantBuddy",
         standaloneMode = useStandalone,
-        skill = useStandalone and { verified = true, reason = nil, rank = 1, evidence = "internal" }
-            or GF.DisenchantBuddy.GetSkillStatus(false),
+        skill = GF.DisenchantBuddy.GetSkillStatus(false),
         counts = self.disenchantCounts,
     }
     return data
@@ -946,6 +973,10 @@ end
 --- Live quote request for an opportunity. No purchase happens here.
 function App:RequestPurchase(row)
     self:Initialize()
+    if GF.Settings.readOnly then return false, "read_only" end
+    if not self.ahOpen then return false, "ah_closed" end
+    if self.recoveryBlocked then return false, "Resolve pending transactions in Ledger first." end
+    GF.Compat.Probe()
     row = row or self.selected
     if type(row) ~= "table" then
         return false, "no_selection"
@@ -976,6 +1007,7 @@ function App:RequestPurchase(row)
         if not data then
             return false, reason or "disenchant_unavailable"
         end
+        if data.illustrative or data.stale then return false, "Disenchant prices are illustrative or stale." end
     end
 
     self.selected = row
@@ -987,9 +1019,7 @@ function App:RequestPurchase(row)
     return self.purchase:RequestQuote(row, {
         strategy = row.strategy,
         marketKey = identity.key,
-        filters = {
-            maxBuyout = tonumber(settingValue("maxBuyout", 0)) or 0,
-        },
+        filters = self:GetFilters(),
         disenchant = data,
         requireSkill = settingValue("requireDisenchantSkill", true) == true,
         quoteFreshness = tonumber(settingValue("quoteFreshness", 10)) or 10,
@@ -1011,6 +1041,8 @@ function App:SubmitPurchase()
     if not self.purchase then
         return false, "not_ready"
     end
+    if not self.ahOpen or GF.Settings.readOnly or self.recoveryBlocked then return false, "trading_unavailable" end
+    self.purchase.options.maxPerPurchase = settingValue("maxBuyout", 0)
     local ok, reason = self.purchase:Submit()
     notify("purchase", self.purchase:GetState(), self.purchase:GetQuote())
     return ok, reason
@@ -1030,18 +1062,7 @@ function App:SubmitQuote(quote)
         return false, "missing_quote"
     end
     if quote.isCommodity then
-        if settingValue("allowCommodityPurchase", false) ~= true then
-            return false, "commodity_disabled"
-        end
-        local api = _G.C_AuctionHouse
-        if type(api) == "table" and type(api.StartCommoditiesPurchase) == "function" then
-            local ok, reason = pcall(api.StartCommoditiesPurchase, quote.itemId, quote.quantity)
-            if not ok then
-                return false, tostring(reason)
-            end
-            return true
-        end
-        return false, "commodity_unsupported"
+        return false, "commodity_disabled"
     end
     return GF.LiveMarket:PlaceBid(quote.auctionId, quote.buyoutTotal)
 end
@@ -1154,16 +1175,12 @@ function App:CheckPendingConfirmation()
         self.pendingConfirmation = nil
         return
     end
-    local money = GF.Compat.GetMoney()
-    if pending.moneyBefore > 0 and money <= pending.moneyBefore - pending.cost then
-        self.purchase:OnSubmitEvent("confirmed", {confirmedAt = nowOf()})
-        return
-    end
+    -- A money change alone cannot identify which auction was purchased.
     if nowOf() >= pending.deadline then
         self.pendingConfirmation = nil
         self.purchase:OnSubmitEvent("unknown", {reason = "confirmation_timeout"})
         self:MarkTransactionUncertain(pending.transactionId, "confirmation_timeout")
-        self:ChargeBudget(pending.transactionId, pending.cost)
+        self.recoveryBlocked = true
         printMessage(GF.L["Purchase outcome is uncertain."])
         notify("ledger")
         self:Save()
@@ -1172,6 +1189,10 @@ end
 
 function App:ReasonText(reason)
     local map = {
+        ah_closed = GF.L["Open the auction house first."],
+        scan_pending = GF.L["A scan is pending. Complete or cancel it before starting another."],
+        profit_filters = GF.L["The live offer does not meet your profit or ROI limits."],
+        read_only = GF.L["Saved data is newer or invalid. Trading is disabled."],
         expired = GF.L["Quote expired."],
         insufficient_funds = GF.L["Not enough gold."],
         budget = GF.L["Session budget exceeded."],
@@ -1216,13 +1237,14 @@ function App:GetLedgerMetrics()
 end
 
 function App:MarkReceived(transactionId, quantity)
+    if GF.Settings.readOnly then return false, "read_only" end
     local record = self.ledger:Get(transactionId)
     if not record then
         return false, "not_found"
     end
     local amount = quantity or (record.purchasedQuantity - record.receivedQuantity)
     local delta, reason = self.ledger:MarkReceived(transactionId, amount)
-    if not delta then
+    if not delta or delta <= 0 then
         return false, reason
     end
     notify("ledger")
@@ -1231,6 +1253,7 @@ function App:MarkReceived(transactionId, quantity)
 end
 
 function App:AddProceeds(transactionId, amount, quantity)
+    if GF.Settings.readOnly then return false, "read_only" end
     local record = self.ledger:Get(transactionId)
     if not record then
         return false, "not_found"
@@ -1269,6 +1292,9 @@ function App:MarkFailed(transactionId, reason)
 end
 
 function App:ResetSessionBudget()
+    if self.recoveryBlocked or (self.purchase and self.purchase:IsBusy()) then
+        return false, "Resolve pending purchases before resetting the budget."
+    end
     GF.Settings.ResetSessionBudget()
     notify("budget")
     notify("settings", "sessionBudget")
@@ -1283,6 +1309,9 @@ function App:ResetFilters()
 end
 
 function App:ResetAllData()
+    if GF.Settings.readOnly or self.recoveryBlocked or (self.purchase and self.purchase:IsBusy()) then
+        return false, "Resolve pending purchases before resetting data."
+    end
     GF.Settings.ResetAll()
     if self.index then
         self.index:Reset()
@@ -1304,6 +1333,7 @@ function App:ResetAllData()
     notify("filters")
     notify("ledger")
     self:Save()
+    return true
 end
 
 function App:GetDiagnostics()
@@ -1340,49 +1370,41 @@ end
 
 --- Dependency check
 function App:CheckDependencies()
-    local currentSettings = settings()
-    local missing = {}
-    local warnings = {}
+    GF.AuctionatorAdapter:Register()
+    local report = GF.Compat.Probe()
+    self.health = GF.Compat.GetHealth(report)
+    notify("health")
+    return report.canScanAuctionator or report.canScanNative
+end
 
-    -- Auctionator (Required unless standalone mode with native scan)
-    local needAuctionator = currentSettings.standaloneMode ~= true
-        and currentSettings.scanProvider ~= "native"
-    if needAuctionator and not GF.AuctionatorAdapter.IsAvailable() then
-        table.insert(missing, "|cffff0000Auctionator|r (required for full scans)")
-    elseif GF.AuctionatorAdapter.IsAvailable() and not GF.AuctionatorAdapter.registered then
-        table.insert(warnings, "|cffffff00Auctionator|r loaded but scan events not registered")
+function App:RecoverPendingPurchases()
+    self.recoveryBlocked = false
+    for _, tx in ipairs(self.ledger.transactions) do
+        if tx.status == TX.SUBMITTED then self.ledger:MarkUncertain(tx.id, "reload_during_submission") end
+        if tx.status == TX.UNCERTAIN then self.recoveryBlocked = true end
     end
+end
 
-    -- DisenchantBuddy (Optional - only needed if not standalone)
-    local needDB = currentSettings.standaloneMode ~= true
-    if needDB and not GF.DisenchantBuddy.IsAvailable() then
-        table.insert(warnings, "|cff00ff00DisenchantBuddy|r (optional - disenchant estimates disabled)")
+function App:ResolveTransaction(id, confirmed)
+    if GF.Settings.readOnly then return false, "read_only" end
+    local tx = self.ledger:Get(id)
+    if not tx or tx.status ~= TX.UNCERTAIN then return false, "not_uncertain" end
+    if self.purchase and self.purchase:GetPending() and self.purchase:GetPending().localTransactionId == id then
+        self.purchase:ResolveUncertain(confirmed)
+        if not confirmed then self.ledger:Fail(id, "manually_verified_failed") end
+    elseif confirmed then
+        self.ledger:Transition(id, TX.CONFIRMED)
+        self.ledger:MarkAwaitingMail(id)
+        self:ChargeBudget(id, tx.purchasedCost)
+    else
+        self.ledger:Fail(id, "manually_verified_failed")
     end
-
-    -- LibAHTab (Embedded - always available)
-    local libAHTab = _G.LibStub and _G.LibStub:GetLibrary("LibAHTab-1-0", true)
-    if not libAHTab then
-        table.insert(missing, "|cffff0000LibAHTab|r (embedded - should never be missing)")
-    end
-
-    -- Display results
-    if currentSettings.standaloneMode == true then
-        printMessage("|cff00ff00GoblinFlip: Standalone Mode Active (no external dependencies required)|r")
-    end
-
-    if #missing > 0 then
-        printMessage("|cffff0000GoblinFlip: Missing dependencies:|r")
-        for _, m in ipairs(missing) do printMessage("  - " .. m) end
-        return false
-    end
-
-    if #warnings > 0 then
-        printMessage("|cffffff00GoblinFlip: Optional dependencies:|r")
-        for _, w in ipairs(warnings) do printMessage("  - " .. w) end
-    end
-
+    self:RecoverPendingPurchases()
+    self:Save()
+    notify("ledger")
     return true
 end
+
 
 
 
@@ -1391,10 +1413,7 @@ end
 function App:ToggleFlipTooltip()
     local current = settingValue("showFlipTooltip", false)
     local newValue = not current
-    GF.Settings.Set("showFlipTooltip", newValue)
-    if GF.UI and GF.UI.UpdateTooltipSettings then
-        pcall(GF.UI.UpdateTooltipSettings, newValue)
-    end
+    self:SetSetting("showFlipTooltip", newValue)
     notify("tooltip_toggle", newValue)
     return newValue
 end
@@ -1451,9 +1470,10 @@ function App:ShowFlipContextMenu()
     }
 
     -- Try to use UIDropDownMenu, fallback to simple print
-    if UIDropDownMenu_Show then
+    if ToggleDropDownMenu then
         -- Attempt to show dropdown at cursor position
-        local dropdown = CreateFrame("Frame", "GoblinFlipContextMenu", UIParent, "UIDropDownMenuTemplate")
+        local dropdown = self.contextDropdown or CreateFrame("Frame", "GoblinFlipContextMenu", UIParent, "UIDropDownMenuTemplate")
+        self.contextDropdown = dropdown
         UIDropDownMenu_Initialize(dropdown, function(self2)
             for index = 1, #menu do
                 local info = UIDropDownMenu_CreateInfo()
@@ -1463,7 +1483,7 @@ function App:ShowFlipContextMenu()
                 UIDropDownMenu_AddButton(info)
             end
         end)
-        UIDropDownMenu_Show(dropdown, "cursor")
+        ToggleDropDownMenu(1, nil, dropdown, "cursor", 0, 0)
     else
         printMessage(" |cffFFD700GoblinFlip context menu:|r")
         for index = 1, #menu do
@@ -1478,70 +1498,8 @@ end
 
 --- Add GoblinFlip info line to an item tooltip.
 -- Called from GameTooltip hooks when an item is being shown.
-function App:AddTooltipInfo(tooltip)
-    if not settingValue("showFlipTooltip", false) then
-        return
-    end
-
-    if not self.selected then
-        -- Show general scan info instead of selected opportunity
-        local identity = self.identity
-        if identity and identity.house ~= GF.Domain.Market.HOUSE_UNKNOWN then
-            local scanInfo = string.format("%s %s |r", GF.L["Market"], identity.houseLabel or "")
-            -- Try to add a line with scan status
-            if type(tooltip) == "table" and tooltip.AddDoubleLine then
-                tooltip:AddDoubleLine(GF.L["GoblinFlip"], scanInfo, 1.0, 1.0, 1.0, 0.82, 0.82, 0.82)
-            end
-        end
-        return
-    end
-
-    -- Show selected opportunity info
-    local opportunity = self.selected
-    local profitText = GF.Util.FormatMoney(opportunity.profit or 0)
-    local roiText = opportunity.roi and string.format("%.1f%%", opportunity.roi / 10) or ""
-
-    local line = string.format("|cffFFD700GF: %s %s|r %s %s", GF.L["Flip"], opportunity.itemName or "", profitText, roiText)
-
-    if type(tooltip) == "table" and tooltip.AddDoubleLine then
-        tooltip:AddDoubleLine(GF.L["GoblinFlip"], line, 1.0, 1.0, 1.0, 0.82, 0.82, 0.82)
-    elseif type(tooltip) == "table" and tooltip.AddLine then
-        tooltip:AddLine(line, 1.0, 1.0, 1.0, true)
-    end
-end
-
---- Hook GameTooltip to show GoblinFlip info when toggle is on.
--- This runs after ADDON_LOADED and PLAYER_LOGIN.
 function App:HookTooltips()
-    if self.tooltipHooked then
-        return
-    end
-    self.tooltipHooked = true
-
-    -- Hook GameTooltip_SetDefaultAnchor if available
-    if type(GameTooltip_SetDefaultAnchor) == "function" then
-        -- We hook OnShow to add our info
-    end
-
-    -- Register for tooltip events via the frame script
-    local oldOnShow = GameTooltip:GetScript("OnShow")
-    GameTooltip:SetScript("OnShow", function(self2)
-        if oldOnShow then
-            oldOnShow(self2)
-        end
-        App:AddTooltipInfo(self2)
-    end)
-
-    -- Also hook ItemRefTooltip for item links
-    local oldItemRefOnShow = ItemRefTooltip:GetScript("OnShow")
-    ItemRefTooltip:SetScript("OnShow", function(self2)
-        if oldItemRefOnShow then
-            oldItemRefOnShow(self2)
-        end
-        App:AddTooltipInfo(self2)
-    end)
-
-    printMessage(GF.L["Tooltip integration enabled."])
+    GF.UI.Tooltip.SetEnabled(settingValue("showFlipTooltip", false))
 end
 
 --- Enable/disable the tooltip context menu toggle via settings.
@@ -1550,25 +1508,4 @@ function App:ToggleContextMenu()
     GF.Settings.Set("showFlipContextMenu", not current)
     notify("context_menu_toggle", not current)
     return not current
-end
-
---- Register tooltip-related events and hooks.
-function App:RegisterTooltipEvents()
-    if self.tooltipEventsRegistered then
-        return
-    end
-    self.tooltipEventsRegistered = true
-
-    -- We hook tooltips in the Initialize function after UI is ready
-    -- But register the slash command and setting changelisteners
-    if type(_G.SLASH_GOBLINFLIP1) ~= "nil" then
-        -- Slash command already registered, just ensure our handlers work
-    end
-
-    -- Listen for setting changes
-    self:After(1, function()
-        if GF.Settings then
-            -- Settings change handler would call notify events
-        end
-    end)
 end

@@ -59,7 +59,7 @@ function Widgets.CreateDropdown(parent, width, items, onSelect)
             info.value = item.value
             info.func = function(self2)
                 UIDropDownMenu_SetSelectedValue(dd, self2.value)
-                if onSelect then onSelect(self2.value, self2:GetText()) end
+                if onSelect then onSelect(item.value, item.text) end
             end
             info.checked = (UIDropDownMenu_GetSelectedValue(dd) == item.value)
             UIDropDownMenu_AddButton(info, level)
@@ -146,17 +146,7 @@ end
 ---@param copper number
 ---@return string
 function Widgets.FormatMoney(copper)
-    if not copper or copper < 0 then return "0c" end
-    local gold = math.floor(copper / 10000)
-    local silver = math.floor((copper % 10000) / 100)
-    local c = copper % 100
-    if gold > 0 then
-        return string.format("|cffffd700%dg|r |cffc7c7cf%ds|r |cffeda55f%dc|r", gold, silver, c)
-    elseif silver > 0 then
-        return string.format("|cffc7c7cf%ds|r |cffeda55f%dc|r", silver, c)
-    else
-        return string.format("|cffeda55f%dc|r", c)
-    end
+    return GF.Util.FormatMoney(copper or 0)
 end
 
 --- Format ROI percentage.

@@ -119,7 +119,10 @@ local function pushObservation(observation)
         table.remove(list, 1)
     end
     addon.lastSnapshot = observation
+    if addon.listener then addon.listener(observation) end
 end
+
+function GF.Merchant.SetListener(listener) GF.Merchant.listener = listener end
 
 --- Read merchant stock and buyback slots without interacting with them.
 function GF.Merchant.Snapshot(reason)
@@ -239,7 +242,7 @@ function GF.Merchant.Initialize()
 
     local frame = CreateFrame("Frame")
     GF.Merchant.frame = frame
-    local events = {"MERCHANT_SHOW", "MERCHANT_UPDATE", "MERCHANT_CLOSED", "MERCHANT_CONFIRM_TRADE"}
+    local events = {"MERCHANT_SHOW", "MERCHANT_UPDATE", "MERCHANT_CLOSED"}
     for index = 1, #events do
         pcall(frame.RegisterEvent, frame, events[index])
     end
@@ -252,9 +255,6 @@ function GF.Merchant.Initialize()
             if GF.Merchant.open then
                 GF.Merchant.Snapshot("update")
             end
-        elseif event == "MERCHANT_CONFIRM_TRADE" then
-            -- Item sold to vendor
-            GF.Merchant.RecordVendorSale(...)
         else
             if GF.Merchant.open then
                 GF.Merchant.Snapshot("closed")

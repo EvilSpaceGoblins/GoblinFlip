@@ -82,7 +82,7 @@ function GF.LiveMarket.GetItemKey(listing)
     return GF.ItemInfo.GetItemKey(listing)
 end
 
-function GF.LiveMarket.IsCommodity(itemKey)
+function GF.LiveMarket:IsCommodity(itemKey)
     return GF.ItemInfo.IsCommodity(itemKey)
 end
 

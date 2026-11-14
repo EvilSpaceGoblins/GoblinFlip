@@ -210,8 +210,8 @@ function GF.Compat.Probe()
             and type(ah.GetNumItemSearchResults) == "function"
             and type(ah.GetItemSearchResultInfo) == "function",
         canBuyNonCommodity = type(ah) == "table" and type(ah.PlaceBid) == "function",
-        canScanAuctionator = auctionatorInfo.contractAvailable,
-        canScanNative = #replicateMissing == 0,
+        canScanAuctionator = auctionatorInfo.contractAvailable and GF.AuctionatorAdapter and GF.AuctionatorAdapter.registered == true or false,
+        canScanNative = #replicateMissing == 0 and (not GF.NativeScan or not GF.NativeScan.initialized or GF.NativeScan.eventRegistered),
         savedVariables = type(GoblinFlipDB) == "table",
     }
 
@@ -230,6 +230,38 @@ end
 
 function GF.Compat.GetReport()
     return GF.Compat.report or GF.Compat.Probe()
+end
+
+function GF.Compat.GetHealth(report)
+    report = report or GF.Compat.Probe()
+    local function addonState(name, ready)
+        if ready then return "ready" end
+        local api = _G.C_AddOns or _G
+        local info = api.GetAddOnInfo or _G.GetAddOnInfo
+        local ok, found = pcall(function() return info and info(name) end)
+        if not ok or not found then return "missing" end
+        local enabled = api.GetAddOnEnableState or _G.GetAddOnEnableState
+        if enabled then
+            local value
+            if api == _G then value = safeCall(enabled, nil, name) else value = safeCall(enabled, name) end
+            if value == 0 then return "disabled" end
+        end
+        local loaded = api.IsAddOnLoaded or _G.IsAddOnLoaded
+        if loaded and not safeCall(loaded, name) then return "not loaded" end
+        return "incompatible API"
+    end
+    return {
+        {name = "Auctionator scan", state = addonState("Auctionator", report.canScanAuctionator),
+            action = "Install/enable Auctionator with FullScan events, then /reload. Scan using its Get All button."},
+        {name = "Native scan", state = report.canScanNative and "ready" or "unavailable",
+            action = "Requires replicate APIs and event support. Select Native in Settings when available."},
+        {name = "Live query / item buying", state = report.canQueryLive and report.canBuyNonCommodity and "ready" or "unavailable",
+            action = "Open the auction house on a supported client. Commodity purchases are disabled."},
+        {name = "Auction house tab", state = report.libAHTab and "ready" or "unavailable",
+            action = "Open the AH to attach the tab; /gf always opens the separate window."},
+        {name = "DisenchantBuddy (optional)", state = addonState("DisenchantBuddy", report.disenchantBuddy.valueFunction),
+            action = "Install/enable its supported API for executable estimates. Internal prices are illustrative only."},
+    }
 end
 
 function GF.Compat.IsAhSupported()

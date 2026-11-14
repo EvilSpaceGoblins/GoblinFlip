@@ -77,7 +77,7 @@ function Options.CreateGeneralTab()
     local y = -10
 
     -- Session Budget
-    local label = Widgets.CreateFontString(frame, GF.L["Session Budget"], "GameFontNormal")
+    local label = Widgets.CreateFontString(frame, GF.L["Session Budget (gold)"], "GameFontNormal")
     label:SetPoint("TOPLEFT", 0, y)
     y = y - 18
 
@@ -85,8 +85,8 @@ function Options.CreateGeneralTab()
     Options.budgetBox:SetPoint("TOPLEFT", 0, y)
     Options.budgetBox:SetScript("OnEnterPressed", function(self)
         local val = tonumber(self:GetText())
-        if val and val >= 0 then GF.Settings.Set("sessionBudget", val * 10000) end
-        self:SetText(Widgets.FormatMoney(GF.Settings.Get("sessionBudget") or 0))
+        if val and val >= 0 then GF.UI.SetSetting("sessionBudget", val * 10000) end
+        self:SetText(tostring((GF.Settings.Get("sessionBudget") or 0) / 10000))
     end)
     y = y - 34
 
@@ -99,8 +99,8 @@ function Options.CreateGeneralTab()
     Options.maxBuyoutBox:SetPoint("TOPLEFT", 0, y)
     Options.maxBuyoutBox:SetScript("OnEnterPressed", function(self)
         local val = tonumber(self:GetText())
-        if val and val >= 0 then GF.Settings.Set("maxBuyout", val * 10000) end
-        self:SetText(Widgets.FormatMoney(GF.Settings.Get("maxBuyout") or 0))
+        if val and val >= 0 then GF.UI.SetSetting("maxBuyout", val * 10000) end
+        self:SetText(tostring((GF.Settings.Get("maxBuyout") or 0) / 10000))
     end)
     y = y - 34
 
@@ -113,26 +113,27 @@ function Options.CreateGeneralTab()
     Options.quoteFreshnessBox:SetPoint("TOPLEFT", 0, y)
     Options.quoteFreshnessBox:SetScript("OnEnterPressed", function(self)
         local val = tonumber(self:GetText())
-        if val and val >= 1 and val <= 60 then GF.Settings.Set("quoteFreshness", val) end
+        if val and val >= 1 and val <= 60 then GF.UI.SetSetting("quoteFreshness", val) end
         self:SetText(tostring(GF.Settings.Get("quoteFreshness") or 10))
     end)
     y = y - 34
 
     -- Allow Commodity Purchase
-    Options.commodityCheck = Widgets.CreateCheckButton(frame, GF.L["Allow Commodity Direct Purchase"], GF.L["Enable direct commodity buyout (experimental)"])
+    Options.commodityCheck = Widgets.CreateCheckButton(frame, GF.L["Commodity purchases (unavailable)"], GF.L["Unavailable: commodity purchase confirmation is not implemented."])
     Options.commodityCheck:SetPoint("TOPLEFT", 0, y)
+    Options.commodityCheck:Disable()
     Options.commodityCheck:SetChecked(GF.Settings.Get("allowCommodityPurchase") == true)
     Options.commodityCheck:SetScript("OnClick", function(self)
-        GF.Settings.Set("allowCommodityPurchase", self:GetChecked())
+        GF.UI.SetSetting("allowCommodityPurchase", self:GetChecked())
     end)
     y = y - 30
 
     -- Standalone Mode
-    Options.standaloneCheck = Widgets.CreateCheckButton(frame, GF.L["Standalone Mode (Zero Dependencies)"], GF.L["Use native scan and internal DE data. No Auctionator or DisenchantBuddy required."])
+    Options.standaloneCheck = Widgets.CreateCheckButton(frame, GF.L["Open separate window at auction house"], GF.L["Window preference only. Select the scan provider separately."])
     Options.standaloneCheck:SetPoint("TOPLEFT", 0, y)
     Options.standaloneCheck:SetChecked(GF.Settings.Get("standaloneMode") == true)
     Options.standaloneCheck:SetScript("OnClick", function(self)
-        GF.Settings.Set("standaloneMode", self:GetChecked())
+        GF.UI.SetSetting("standaloneMode", self:GetChecked())
         if GF.App and GF.App.CheckDependencies then GF.App:CheckDependencies() end
     end)
     y = y - 30
@@ -142,7 +143,7 @@ function Options.CreateGeneralTab()
     Options.tooltipCheck:SetPoint("TOPLEFT", 0, y)
     Options.tooltipCheck:SetChecked(GF.Settings.Get("showFlipTooltip") == true)
     Options.tooltipCheck:SetScript("OnClick", function(self)
-        GF.Settings.Set("showFlipTooltip", self:GetChecked())
+        GF.UI.SetSetting("showFlipTooltip", self:GetChecked())
         if GF.UI and GF.UI.Tooltip then GF.UI.Tooltip.SetEnabled(self:GetChecked()) end
     end)
     y = y - 30
@@ -152,7 +153,7 @@ function Options.CreateGeneralTab()
     Options.contextMenuCheck:SetPoint("TOPLEFT", 0, y)
     Options.contextMenuCheck:SetChecked(GF.Settings.Get("showFlipContextMenu") == true)
     Options.contextMenuCheck:SetScript("OnClick", function(self)
-        GF.Settings.Set("showFlipContextMenu", self:GetChecked())
+        GF.UI.SetSetting("showFlipContextMenu", self:GetChecked())
     end)
     y = y - 30
 
@@ -161,7 +162,7 @@ function Options.CreateGeneralTab()
     Options.debugCheck:SetPoint("TOPLEFT", 0, y)
     Options.debugCheck:SetChecked(GF.Settings.Get("debug") == true)
     Options.debugCheck:SetScript("OnClick", function(self)
-        GF.Settings.Set("debug", self:GetChecked())
+        GF.UI.SetSetting("debug", self:GetChecked())
     end)
     y = y - 30
 
@@ -201,17 +202,17 @@ function Options.CreateScanningTab()
         { value = "native", text = GF.L["Native Replicate (Standalone)"] },
     }
     Options.providerDropdown = Widgets.CreateDropdown(frame, 250, providerItems, function(value)
-        GF.Settings.Set("scanProvider", value)
+        GF.UI.SetSetting("scanProvider", value)
     end)
     Options.providerDropdown:SetPoint("TOPLEFT", -5, y)
     y = y - 40
 
     -- Experimental Native Scan
-    Options.nativeScanCheck = Widgets.CreateCheckButton(frame, GF.L["Enable Native Scan (Experimental)"], GF.L["Allow native replicate scan without Auctionator"])
+    Options.nativeScanCheck = Widgets.CreateCheckButton(frame, GF.L["Use native scan provider"], GF.L["Allow native replicate scan without Auctionator"])
     Options.nativeScanCheck:SetPoint("TOPLEFT", 0, y)
-    Options.nativeScanCheck:SetChecked(GF.Settings.Get("experimentalNativeScan") == true)
+    Options.nativeScanCheck:SetChecked(GF.Settings.Get("scanProvider") == "native")
     Options.nativeScanCheck:SetScript("OnClick", function(self)
-        GF.Settings.Set("experimentalNativeScan", self:GetChecked())
+        GF.UI.SetSetting("scanProvider", self:GetChecked() and "native" or "auctionator")
     end)
     y = y - 30
 
@@ -227,14 +228,16 @@ function Options.CreateScanningTab()
         { value = "neutral", text = GF.L["Neutral (Blackwater)"] },
     }
     Options.marketDropdown = Widgets.CreateDropdown(frame, 250, marketItems, function(value)
-        GF.Settings.Set("marketHouseOverride", value)
+        GF.UI.SetSetting("marketHouseOverride", value)
         if GF.App and GF.App.DetectMarket then GF.App:DetectMarket(true) end
     end)
     Options.marketDropdown:SetPoint("TOPLEFT", -5, y)
     y = y - 40
 
     -- Disenchant Settings
-    Widgets.CreateSeparator(frame):SetPoint("TOPLEFT", 0, y):SetPoint("TOPRIGHT", 0, y)
+    local separator = Widgets.CreateSeparator(frame)
+    separator:SetPoint("TOPLEFT", 0, y)
+    separator:SetPoint("TOPRIGHT", 0, y)
     y = y - 10
 
     label = Widgets.CreateFontString(frame, GF.L["Disenchant Settings"], "GameFontNormal")
@@ -245,7 +248,7 @@ function Options.CreateScanningTab()
     Options.deEnabledCheck:SetPoint("TOPLEFT", 0, y)
     Options.deEnabledCheck:SetChecked(GF.Settings.Get("disenchantEnabled") ~= false)
     Options.deEnabledCheck:SetScript("OnClick", function(self)
-        GF.Settings.Set("disenchantEnabled", self:GetChecked())
+        GF.UI.SetSetting("disenchantEnabled", self:GetChecked())
     end)
     y = y - 30
 
@@ -253,7 +256,7 @@ function Options.CreateScanningTab()
     Options.deRequireSkillCheck:SetPoint("TOPLEFT", 0, y)
     Options.deRequireSkillCheck:SetChecked(GF.Settings.Get("requireDisenchantSkill") == true)
     Options.deRequireSkillCheck:SetScript("OnClick", function(self)
-        GF.Settings.Set("requireDisenchantSkill", self:GetChecked())
+        GF.UI.SetSetting("requireDisenchantSkill", self:GetChecked())
     end)
     y = y - 30
 
@@ -261,13 +264,15 @@ function Options.CreateScanningTab()
     Options.assumeSkillCheck:SetPoint("TOPLEFT", 0, y)
     Options.assumeSkillCheck:SetChecked(GF.Settings.Get("assumeDisenchantSkill") == true)
     Options.assumeSkillCheck:SetScript("OnClick", function(self)
-        GF.Settings.Set("assumeDisenchantSkill", self:GetChecked())
+        GF.UI.SetSetting("assumeDisenchantSkill", self:GetChecked())
         if GF.DisenchantBuddy and GF.DisenchantBuddy.DetectSkill then GF.DisenchantBuddy.DetectSkill(true) end
     end)
     y = y - 30
 
     -- History Settings
-    Widgets.CreateSeparator(frame):SetPoint("TOPLEFT", 0, y):SetPoint("TOPRIGHT", 0, y)
+    local separator = Widgets.CreateSeparator(frame)
+    separator:SetPoint("TOPLEFT", 0, y)
+    separator:SetPoint("TOPRIGHT", 0, y)
     y = y - 10
 
     label = Widgets.CreateFontString(frame, GF.L["History Retention"], "GameFontNormal")
@@ -278,7 +283,7 @@ function Options.CreateScanningTab()
     Options.historyDaysBox:SetPoint("TOPLEFT", 0, y)
     Options.historyDaysBox:SetScript("OnEnterPressed", function(self)
         local val = tonumber(self:GetText())
-        if val and val >= 1 and val <= 90 then GF.Settings.Set("historyDays", val) end
+        if val and val >= 1 and val <= 90 then GF.UI.SetSetting("historyDays", val) end
         self:SetText(tostring(GF.Settings.Get("historyDays") or 7))
     end)
     Widgets.CreateFontString(frame, GF.L["Days"], "GameFontNormalSmall"):SetPoint("LEFT", Options.historyDaysBox, "RIGHT", 5, 0)
@@ -287,7 +292,7 @@ function Options.CreateScanningTab()
     Options.historySnapshotsBox:SetPoint("LEFT", Options.historyDaysBox, "RIGHT", 80, 0)
     Options.historySnapshotsBox:SetScript("OnEnterPressed", function(self)
         local val = tonumber(self:GetText())
-        if val and val >= 1 and val <= 100 then GF.Settings.Set("historySnapshots", val) end
+        if val and val >= 1 and val <= 100 then GF.UI.SetSetting("historySnapshots", val) end
         self:SetText(tostring(GF.Settings.Get("historySnapshots") or 10))
     end)
     Widgets.CreateFontString(frame, GF.L["Snapshots/Market"], "GameFontNormalSmall"):SetPoint("LEFT", Options.historySnapshotsBox, "RIGHT", 5, 0)
@@ -311,7 +316,7 @@ function Options.CreateAlertsTab()
     Options.soundCheck:SetPoint("TOPLEFT", 0, y)
     Options.soundCheck:SetChecked(GF.Settings.Get("soundAlerts") == true)
     Options.soundCheck:SetScript("OnClick", function(self)
-        GF.Settings.Set("soundAlerts", self:GetChecked())
+        GF.UI.SetSetting("soundAlerts", self:GetChecked())
     end)
     y = y - 30
 
@@ -324,7 +329,7 @@ function Options.CreateAlertsTab()
     Options.soundFileBox:SetPoint("TOPLEFT", 0, y)
     Options.soundFileBox:SetText(GF.Settings.Get("soundFile") or "Sound\\Interface\\AuctionWindowOpen.wav")
     Options.soundFileBox:SetScript("OnEnterPressed", function(self)
-        GF.Settings.Set("soundFile", self:GetText())
+        GF.UI.SetSetting("soundFile", self:GetText())
     end)
     y = y - 34
 
@@ -338,7 +343,9 @@ function Options.CreateAlertsTab()
     y = y - 34
 
     -- Alert Thresholds
-    Widgets.CreateSeparator(frame):SetPoint("TOPLEFT", 0, y):SetPoint("TOPRIGHT", 0, y)
+    local separator = Widgets.CreateSeparator(frame)
+    separator:SetPoint("TOPLEFT", 0, y)
+    separator:SetPoint("TOPRIGHT", 0, y)
     y = y - 10
 
     label = Widgets.CreateFontString(frame, GF.L["Alert Thresholds"], "GameFontNormal")
@@ -349,16 +356,16 @@ function Options.CreateAlertsTab()
     Options.minProfitAlertBox:SetPoint("TOPLEFT", 0, y)
     Options.minProfitAlertBox:SetScript("OnEnterPressed", function(self)
         local val = tonumber(self:GetText())
-        if val and val >= 0 then GF.Settings.Set("alertMinProfit", val * 10000) end
-        self:SetText(Widgets.FormatMoney(GF.Settings.Get("alertMinProfit") or 0))
+        if val and val >= 0 then GF.UI.SetSetting("alertMinProfit", val * 10000) end
+        self:SetText(tostring((GF.Settings.Get("alertMinProfit") or 0) / 10000))
     end)
-    Widgets.CreateFontString(frame, GF.L["Min Profit"], "GameFontNormalSmall"):SetPoint("LEFT", Options.minProfitAlertBox, "RIGHT", 10, 0)
+    Widgets.CreateFontString(frame, GF.L["Min Profit (gold)"], "GameFontNormalSmall"):SetPoint("LEFT", Options.minProfitAlertBox, "RIGHT", 10, 0)
 
     Options.minROIAlertBox = Widgets.CreateEditBox(frame, 60, 24, 5, true)
     Options.minROIAlertBox:SetPoint("LEFT", Options.minProfitAlertBox, "RIGHT", 80, 0)
     Options.minROIAlertBox:SetScript("OnEnterPressed", function(self)
         local val = tonumber(self:GetText())
-        if val and val >= 0 then GF.Settings.Set("alertMinRoi", val) end
+        if val and val >= 0 then GF.UI.SetSetting("alertMinRoi", val) end
         self:SetText(tostring(GF.Settings.Get("alertMinRoi") or 0))
     end)
     Widgets.CreateFontString(frame, GF.L["Min ROI %"], "GameFontNormalSmall"):SetPoint("LEFT", Options.minROIAlertBox, "RIGHT", 5, 0)
@@ -378,7 +385,7 @@ function Options.CreateAdvancedTab()
     Options.groupedCheck:SetPoint("TOPLEFT", 0, y)
     Options.groupedCheck:SetChecked(GF.Settings.Get("groupedView") == true)
     Options.groupedCheck:SetScript("OnClick", function(self)
-        GF.Settings.Set("groupedView", self:GetChecked())
+        GF.UI.SetSetting("groupedView", self:GetChecked())
     end)
     y = y - 30
 
@@ -394,7 +401,7 @@ function Options.CreateAdvancedTab()
         { value = "quantity", text = GF.L["Quantity"] },
     }
     Options.sortDropdown = Widgets.CreateDropdown(frame, 150, sortItems, function(value)
-        GF.Settings.Set("defaultSort", value)
+        GF.UI.SetSetting("defaultSort", value)
     end)
     Options.sortDropdown:SetPoint("TOPLEFT", -5, y)
     y = y - 40
@@ -409,7 +416,7 @@ function Options.CreateAdvancedTab()
         { value = "asc", text = GF.L["Ascending"] },
     }
     Options.dirDropdown = Widgets.CreateDropdown(frame, 150, dirItems, function(value)
-        GF.Settings.Set("defaultSortDirection", value)
+        GF.UI.SetSetting("defaultSortDirection", value)
     end)
     Options.dirDropdown:SetPoint("TOPLEFT", -5, y)
     y = y - 40
@@ -419,7 +426,7 @@ function Options.CreateAdvancedTab()
     Options.ownedCheck:SetPoint("TOPLEFT", 0, y)
     Options.ownedCheck:SetChecked(GF.Settings.Get("showOwned") == true)
     Options.ownedCheck:SetScript("OnClick", function(self)
-        GF.Settings.Set("showOwned", self:GetChecked())
+        GF.UI.SetSetting("showOwned", self:GetChecked())
     end)
     y = y - 30
 
@@ -436,7 +443,9 @@ function Options.CreateAdvancedTab()
         { value = 4, text = Widgets.ColorQuality(GF.L["Epic"], 4) },
     }
     Options.qualityDropdown = Widgets.CreateDropdown(frame, 250, qualityItems, function(value)
-        GF.Settings.Set("qualityFilter", value)
+        local filter = {}
+        for quality = value, 7 do filter[quality] = true end
+        GF.UI.SetSetting("qualityFilter", filter)
     end)
     Options.qualityDropdown:SetPoint("TOPLEFT", -5, y)
     y = y - 40
@@ -446,7 +455,7 @@ function Options.CreateAdvancedTab()
     Options.minQtyBox:SetPoint("TOPLEFT", 0, y)
     Options.minQtyBox:SetScript("OnEnterPressed", function(self)
         local val = tonumber(self:GetText())
-        if val and val >= 0 then GF.Settings.Set("minQuantity", val) end
+        if val and val >= 0 then GF.UI.SetSetting("minQuantity", val) end
         self:SetText(tostring(GF.Settings.Get("minQuantity") or 0))
     end)
     Widgets.CreateFontString(frame, GF.L["Min Qty"], "GameFontNormalSmall"):SetPoint("LEFT", Options.minQtyBox, "RIGHT", 10, 0)
@@ -455,7 +464,7 @@ function Options.CreateAdvancedTab()
     Options.maxQtyBox:SetPoint("LEFT", Options.minQtyBox, "RIGHT", 80, 0)
     Options.maxQtyBox:SetScript("OnEnterPressed", function(self)
         local val = tonumber(self:GetText())
-        if val and val >= 0 then GF.Settings.Set("maxQuantity", val) end
+        if val and val >= 0 then GF.UI.SetSetting("maxQuantity", val) end
         self:SetText(tostring(GF.Settings.Get("maxQuantity") or 0))
     end)
     Widgets.CreateFontString(frame, GF.L["Max Qty"], "GameFontNormalSmall"):SetPoint("LEFT", Options.maxQtyBox, "RIGHT", 10, 0)
@@ -463,7 +472,9 @@ function Options.CreateAdvancedTab()
     y = y - 40
 
     -- Diagnostics Button
-    Widgets.CreateSeparator(frame):SetPoint("TOPLEFT", 0, y):SetPoint("TOPRIGHT", 0, y)
+    local separator = Widgets.CreateSeparator(frame)
+    separator:SetPoint("TOPLEFT", 0, y)
+    separator:SetPoint("TOPRIGHT", 0, y)
     y = y - 10
 
     Options.diagBtn = Widgets.CreateButton(frame, GF.L["Print Diagnostics"], 200, 24)
@@ -503,8 +514,8 @@ function Options.Refresh()
     if not Options.frame then return end
 
     local w = Options
-    if w.budgetBox then w.budgetBox:SetText(Widgets.FormatMoney(GF.Settings.Get("sessionBudget") or 0)) end
-    if w.maxBuyoutBox then w.maxBuyoutBox:SetText(Widgets.FormatMoney(GF.Settings.Get("maxBuyout") or 0)) end
+    if w.budgetBox then w.budgetBox:SetText(tostring((GF.Settings.Get("sessionBudget") or 0) / 10000)) end
+    if w.maxBuyoutBox then w.maxBuyoutBox:SetText(tostring((GF.Settings.Get("maxBuyout") or 0) / 10000)) end
     if w.quoteFreshnessBox then w.quoteFreshnessBox:SetText(tostring(GF.Settings.Get("quoteFreshness") or 10)) end
     if w.commodityCheck then w.commodityCheck:SetChecked(GF.Settings.Get("allowCommodityPurchase") == true) end
     if w.standaloneCheck then w.standaloneCheck:SetChecked(GF.Settings.Get("standaloneMode") == true) end
@@ -513,7 +524,7 @@ function Options.Refresh()
     if w.debugCheck then w.debugCheck:SetChecked(GF.Settings.Get("debug") == true) end
 
     if w.providerDropdown then UIDropDownMenu_SetSelectedValue(w.providerDropdown, GF.Settings.Get("scanProvider") or "auctionator") end
-    if w.nativeScanCheck then w.nativeScanCheck:SetChecked(GF.Settings.Get("experimentalNativeScan") == true) end
+    if w.nativeScanCheck then w.nativeScanCheck:SetChecked(GF.Settings.Get("scanProvider") == "native") end
     if w.marketDropdown then UIDropDownMenu_SetSelectedValue(w.marketDropdown, GF.Settings.Get("marketHouseOverride") or "auto") end
     if w.deEnabledCheck then w.deEnabledCheck:SetChecked(GF.Settings.Get("disenchantEnabled") ~= false) end
     if w.deRequireSkillCheck then w.deRequireSkillCheck:SetChecked(GF.Settings.Get("requireDisenchantSkill") == true) end
@@ -523,14 +534,14 @@ function Options.Refresh()
 
     if w.soundCheck then w.soundCheck:SetChecked(GF.Settings.Get("soundAlerts") == true) end
     if w.soundFileBox then w.soundFileBox:SetText(GF.Settings.Get("soundFile") or "Sound\\Interface\\AuctionWindowOpen.wav") end
-    if w.minProfitAlertBox then w.minProfitAlertBox:SetText(Widgets.FormatMoney(GF.Settings.Get("alertMinProfit") or 0)) end
+    if w.minProfitAlertBox then w.minProfitAlertBox:SetText(tostring((GF.Settings.Get("alertMinProfit") or 0) / 10000)) end
     if w.minROIAlertBox then w.minROIAlertBox:SetText(tostring(GF.Settings.Get("alertMinRoi") or 0)) end
 
     if w.groupedCheck then w.groupedCheck:SetChecked(GF.Settings.Get("groupedView") == true) end
     if w.sortDropdown then UIDropDownMenu_SetSelectedValue(w.sortDropdown, GF.Settings.Get("defaultSort") or "profit") end
     if w.dirDropdown then UIDropDownMenu_SetSelectedValue(w.dirDropdown, GF.Settings.Get("defaultSortDirection") or "desc") end
     if w.ownedCheck then w.ownedCheck:SetChecked(GF.Settings.Get("showOwned") == true) end
-    if w.qualityDropdown then UIDropDownMenu_SetSelectedValue(w.qualityDropdown, GF.Settings.Get("qualityFilter") or 0) end
+    if w.qualityDropdown then UIDropDownMenu_SetSelectedValue(w.qualityDropdown, next(GF.Settings.Get("qualityFilter") or {}) or 0) end
     if w.minQtyBox then w.minQtyBox:SetText(tostring(GF.Settings.Get("minQuantity") or 0)) end
     if w.maxQtyBox then w.maxQtyBox:SetText(tostring(GF.Settings.Get("maxQuantity") or 0)) end
 end

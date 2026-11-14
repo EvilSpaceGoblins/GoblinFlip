@@ -1,0 +1,17 @@
+name: Addon checks
+on: [push, pull_request]
+jobs:
+  lua:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        lua: ['5.1', '5.4']
+    steps:
+      - uses: actions/checkout@v4
+      - run: sudo apt-get update && sudo apt-get install -y lua${{ matrix.lua }}
+      - name: Parse Lua files
+        run: find . -name '*.lua' -exec luac${{ matrix.lua }} -p {} \;
+      - run: lua${{ matrix.lua }} Tests/run.lua
+      - run: GF_TEST_LOCALE=deDE lua${{ matrix.lua }} Tests/run.lua
+      - name: Verify release packaging
+        run: python3 scripts/package.py

@@ -112,7 +112,8 @@ function PurchaseManager:GetRemainingBudget(now)
             spent = value
         end
     end
-    return budget - spent - self.reserved
+    if budget == 0 then return math.huge end
+    return math.max(0, budget - spent - self.reserved)
 end
 
 function PurchaseManager:GetMoney()
@@ -197,9 +198,10 @@ function PurchaseManager:Cancel(reason)
     if self.state == STATE.SUBMITTED or self.state == STATE.UNKNOWN then
         return false, "outcome_pending"
     end
+    local cancelledGeneration = self.generation
     self.generation = self.generation + 1
     if type(self.env.cancelQuery) == "function" then
-        pcall(self.env.cancelQuery, self.generation)
+        pcall(self.env.cancelQuery, cancelledGeneration)
     end
     self.quote = nil
     self.activeListing = nil
@@ -328,6 +330,9 @@ function PurchaseManager:OnQueryResults(generation, offers, info)
     }
 
     local maxPerPurchase = (context.filters and context.filters.maxBuyout) or self.options.maxPerPurchase or 0
+    if not GF.Domain.ProfitEngine.Qualifies(opportunity, context.filters) then
+        quote.blockedReason = "profit_filters"
+    end
     if maxPerPurchase > 0 and quote.buyoutTotal > maxPerPurchase then
         quote.blockedReason = "per_purchase_limit"
     end
@@ -367,6 +372,9 @@ function PurchaseManager:ValidateQuote(now)
     if quote.blockedReason then
         return false, quote.blockedReason
     end
+    if self.options.maxPerPurchase > 0 and quote.buyoutTotal > self.options.maxPerPurchase then
+        return false, "per_purchase_limit"
+    end
     if not quote.profit or quote.profit <= 0 then
         return false, "not_profitable"
     end
@@ -382,6 +390,7 @@ function PurchaseManager:ValidateQuote(now)
     if not quote.auctionId and not quote.isCommodity then
         return false, "missing_auction_id"
     end
+    if self.env.validateQuote then return self.env.validateQuote(quote) end
     return true, nil
 end
 

@@ -162,10 +162,10 @@ function GF.Mailbox.Scan()
     }
 
     -- Auto-match mail items to ledger transactions
-    if GF.Domain and GF.Domain.Ledger then
+    if GF.App and GF.App.ledger then
         for _, item in ipairs(items) do
             if item.itemId and item.quantity then
-                local txId = GF.Domain.Ledger.AutoMatchMail(item.itemLink, item.quantity)
+                local txId = GF.App.ledger:AutoMatchMail(item.itemLink, item.quantity)
                 if txId then
                     observation.matchedTransactions[#observation.matchedTransactions + 1] = {
                         itemId = item.itemId,

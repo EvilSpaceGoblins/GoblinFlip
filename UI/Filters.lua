@@ -32,14 +32,17 @@ function Filters.Create(parent)
     Filters.widgets.searchBox = Widgets.CreateEditBox(frame, 280, 24, 50)
     Filters.widgets.searchBox:SetPoint("TOPLEFT", 10, y)
     Filters.widgets.searchBox:SetScript("OnTextChanged", function(self)
+        if Filters.refreshing then return end
         local text = self:GetText()
-        GF.Settings.Set("search", text)
+        GF.UI.SetSetting("search", text)
         if Filters.onChange then Filters.onChange() end
     end)
     y = y - 34
 
     -- Separator
-    Widgets.CreateSeparator(frame).SetPoint("TOPLEFT", 10, y).SetPoint("TOPRIGHT", -10, y)
+    local separator = Widgets.CreateSeparator(frame)
+    separator:SetPoint("TOPLEFT", 10, y)
+    separator:SetPoint("TOPRIGHT", -10, y)
     y = y - 10
 
     -- Section: Strategy
@@ -59,11 +62,13 @@ function Filters.Create(parent)
     y = y - 40
 
     -- Separator
-    Widgets.CreateSeparator(frame).SetPoint("TOPLEFT", 10, y).SetPoint("TOPRIGHT", -10, y)
+    local separator = Widgets.CreateSeparator(frame)
+    separator:SetPoint("TOPLEFT", 10, y)
+    separator:SetPoint("TOPRIGHT", -10, y)
     y = y - 10
 
     -- Section: Min Profit
-    Filters.widgets.minProfitLabel = Widgets.CreateFontString(frame, GF.L["Min Profit"], "GameFontNormal")
+    Filters.widgets.minProfitLabel = Widgets.CreateFontString(frame, GF.L["Min Profit (gold)"], "GameFontNormal")
     Filters.widgets.minProfitLabel:SetPoint("TOPLEFT", 10, y)
     y = y - 18
 
@@ -71,12 +76,12 @@ function Filters.Create(parent)
     Filters.widgets.minProfitBox:SetPoint("TOPLEFT", 10, y)
     Filters.widgets.minProfitBox:SetScript("OnEnterPressed", function(self)
         local val = tonumber(self:GetText())
-        if val and val >= 0 then GF.Settings.Set("minProfit", val * 10000) end
-        self:SetText(Widgets.FormatMoney(GF.Settings.Get("minProfit") or 0))
+        if val and val >= 0 then GF.UI.SetSetting("minProfit", val * 10000) end
+        self:SetText(tostring((GF.Settings.Get("minProfit") or 0) / 10000))
         if Filters.onChange then Filters.onChange() end
     end)
     Filters.widgets.minProfitBox:SetScript("OnEscapePressed", function(self)
-        self:SetText(Widgets.FormatMoney(GF.Settings.Get("minProfit") or 0))
+        self:SetText(tostring((GF.Settings.Get("minProfit") or 0) / 10000))
         self:ClearFocus()
     end)
     y = y - 34
@@ -90,14 +95,14 @@ function Filters.Create(parent)
     Filters.widgets.minROIBox:SetPoint("TOPLEFT", 10, y)
     Filters.widgets.minROIBox:SetScript("OnEnterPressed", function(self)
         local val = tonumber(self:GetText())
-        if val and val >= 0 then GF.Settings.Set("minRoi", val) end
+        if val and val >= 0 then GF.UI.SetSetting("minRoi", val) end
         self:SetText(tostring(GF.Settings.Get("minRoi") or 0))
         if Filters.onChange then Filters.onChange() end
     end)
     y = y - 34
 
     -- Section: Max Buyout
-    Filters.widgets.maxBuyoutLabel = Widgets.CreateFontString(frame, GF.L["Max Buyout"], "GameFontNormal")
+    Filters.widgets.maxBuyoutLabel = Widgets.CreateFontString(frame, GF.L["Max Buyout (gold)"], "GameFontNormal")
     Filters.widgets.maxBuyoutLabel:SetPoint("TOPLEFT", 10, y)
     y = y - 18
 
@@ -105,14 +110,16 @@ function Filters.Create(parent)
     Filters.widgets.maxBuyoutBox:SetPoint("TOPLEFT", 10, y)
     Filters.widgets.maxBuyoutBox:SetScript("OnEnterPressed", function(self)
         local val = tonumber(self:GetText())
-        if val and val >= 0 then GF.Settings.Set("maxBuyout", val * 10000) end
-        self:SetText(Widgets.FormatMoney(GF.Settings.Get("maxBuyout") or 0))
+        if val and val >= 0 then GF.UI.SetSetting("maxBuyout", val * 10000) end
+        self:SetText(tostring((GF.Settings.Get("maxBuyout") or 0) / 10000))
         if Filters.onChange then Filters.onChange() end
     end)
     y = y - 34
 
     -- Separator
-    Widgets.CreateSeparator(frame).SetPoint("TOPLEFT", 10, y).SetPoint("TOPRIGHT", -10, y)
+    local separator = Widgets.CreateSeparator(frame)
+    separator:SetPoint("TOPLEFT", 10, y)
+    separator:SetPoint("TOPRIGHT", -10, y)
     y = y - 10
 
     -- Section: Quality Filter
@@ -121,6 +128,7 @@ function Filters.Create(parent)
     y = y - 18
 
     local qualityItems = {
+        { value = -1, text = GF.L["All qualities"] },
         { value = 0, text = Widgets.ColorQuality(GF.L["Poor"], 0) },
         { value = 1, text = Widgets.ColorQuality(GF.L["Common"], 1) },
         { value = 2, text = Widgets.ColorQuality(GF.L["Uncommon"], 2) },
@@ -128,11 +136,11 @@ function Filters.Create(parent)
         { value = 4, text = Widgets.ColorQuality(GF.L["Epic"], 4) },
     }
     Filters.widgets.qualityDropdown = Widgets.CreateDropdown(frame, 280, qualityItems, function(value)
-        GF.Settings.Set("qualityFilter", value)
+        GF.UI.SetSetting("qualityFilter", value == -1 and {} or {[value] = true})
         if Filters.onChange then Filters.onChange() end
     end)
     Filters.widgets.qualityDropdown:SetPoint("TOPLEFT", -5, y)
-    UIDropDownMenu_SetSelectedValue(Filters.widgets.qualityDropdown, GF.Settings.Get("qualityFilter") or 0)
+    UIDropDownMenu_SetSelectedValue(Filters.widgets.qualityDropdown, next(GF.Settings.Get("qualityFilter") or {}) or -1)
     y = y - 40
 
     -- Section: Quantity Range
@@ -144,7 +152,7 @@ function Filters.Create(parent)
     Filters.widgets.minQtyBox:SetPoint("TOPLEFT", 10, y)
     Filters.widgets.minQtyBox:SetScript("OnEnterPressed", function(self)
         local val = tonumber(self:GetText())
-        if val and val >= 0 then GF.Settings.Set("minQuantity", val) end
+        if val and val >= 0 then GF.UI.SetSetting("minQuantity", val) end
         self:SetText(tostring(GF.Settings.Get("minQuantity") or 0))
         if Filters.onChange then Filters.onChange() end
     end)
@@ -158,7 +166,7 @@ function Filters.Create(parent)
     Filters.widgets.maxQtyBox:SetPoint("TOPLEFT", 10, y)
     Filters.widgets.maxQtyBox:SetScript("OnEnterPressed", function(self)
         local val = tonumber(self:GetText())
-        if val and val >= 0 then GF.Settings.Set("maxQuantity", val) end
+        if val and val >= 0 then GF.UI.SetSetting("maxQuantity", val) end
         self:SetText(tostring(GF.Settings.Get("maxQuantity") or 0))
         if Filters.onChange then Filters.onChange() end
     end)
@@ -169,7 +177,7 @@ function Filters.Create(parent)
     Filters.widgets.showOwnedCheck:SetPoint("TOPLEFT", 10, y)
     Filters.widgets.showOwnedCheck:SetChecked(GF.Settings.Get("showOwned") == true)
     Filters.widgets.showOwnedCheck:SetScript("OnClick", function(self)
-        GF.Settings.Set("showOwned", self:GetChecked())
+        GF.UI.SetSetting("showOwned", self:GetChecked())
         if Filters.onChange then Filters.onChange() end
     end)
     y = y - 30
@@ -188,13 +196,14 @@ end
 
 --- Refresh widget values from settings.
 function Filters.Refresh()
+    Filters.refreshing = true
     local w = Filters.widgets
     if not w then return end
 
     if w.searchBox then w.searchBox:SetText(GF.Settings.Get("search") or "") end
-    if w.minProfitBox then w.minProfitBox:SetText(Widgets.FormatMoney(GF.Settings.Get("minProfit") or 0)) end
+    if w.minProfitBox then w.minProfitBox:SetText(tostring((GF.Settings.Get("minProfit") or 0) / 10000)) end
     if w.minROIBox then w.minROIBox:SetText(tostring(GF.Settings.Get("minRoi") or 0)) end
-    if w.maxBuyoutBox then w.maxBuyoutBox:SetText(Widgets.FormatMoney(GF.Settings.Get("maxBuyout") or 0)) end
+    if w.maxBuyoutBox then w.maxBuyoutBox:SetText(tostring((GF.Settings.Get("maxBuyout") or 0) / 10000)) end
     if w.minQtyBox then w.minQtyBox:SetText(tostring(GF.Settings.Get("minQuantity") or 0)) end
     if w.maxQtyBox then w.maxQtyBox:SetText(tostring(GF.Settings.Get("maxQuantity") or 0)) end
     if w.showOwnedCheck then w.showOwnedCheck:SetChecked(GF.Settings.Get("showOwned") == true) end
@@ -202,8 +211,9 @@ function Filters.Refresh()
         UIDropDownMenu_SetSelectedValue(w.strategyDropdown, GF.App:GetStrategy() or GF.STRATEGY_VENDOR)
     end
     if w.qualityDropdown then
-        UIDropDownMenu_SetSelectedValue(w.qualityDropdown, GF.Settings.Get("qualityFilter") or 0)
+        UIDropDownMenu_SetSelectedValue(w.qualityDropdown, next(GF.Settings.Get("qualityFilter") or {}) or -1)
     end
+    Filters.refreshing = false
 end
 
 --- Set change callback.

@@ -173,7 +173,7 @@ function Notifications:Load(data)
             local set = {}
             if type(list) == "table" then
                 for index = 1, #list do
-                    set[list[index]] = true
+                    if type(list[index]) == "string" then set[list[index]] = true end
                 end
             end
             self.signatures[marketKey] = set

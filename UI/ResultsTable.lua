@@ -39,7 +39,7 @@ function ResultsTable.Create(parent)
     ResultsTable.frame = frame
 
     -- Header row
-    local headerFrame = CreateFrame("Frame", nil, frame)
+    local headerFrame = CreateFrame("Frame", nil, frame, "BackdropTemplate")
     headerFrame:SetPoint("TOPLEFT", 0, 0)
     headerFrame:SetPoint("TOPRIGHT", 0, 0)
     headerFrame:SetHeight(22)
@@ -61,8 +61,13 @@ function ResultsTable.Create(parent)
     -- Scroll frame for rows
     local scroll, content = Widgets.CreateScrollFrame(frame, 600, 378)
     scroll:SetPoint("TOPLEFT", 0, -22)
+    scroll:SetPoint("BOTTOMRIGHT", 0, 0)
     ResultsTable.scrollFrame = scroll
     ResultsTable.content = content
+    scroll:SetScript("OnVerticalScroll", function(self, offset)
+        self:SetVerticalScroll(offset)
+        ResultsTable.Refresh()
+    end)
 
     -- Row templates will be created on demand
     ResultsTable.Refresh()
@@ -150,6 +155,7 @@ local function GetOrCreateRow(index)
         if button == "LeftButton" then
             ResultsTable.SelectRow(self.dataIndex)
         elseif button == "RightButton" and GF.App.ShowFlipContextMenu then
+            GF.App:Select(ResultsTable.data[self.dataIndex])
             GF.App:ShowFlipContextMenu()
         end
     end)
@@ -166,12 +172,14 @@ end
 
 --- Refresh the table with current data.
 function ResultsTable.Refresh()
+    if not ResultsTable.scrollFrame then return end
     local view = GF.App and GF.App.GetView and GF.App:GetView() or {}
-    local rows = view.rows or {}
+    local rows = {}
+    for i, row in ipairs(view.rows or {}) do rows[i] = row end
     ResultsTable.data = rows
 
     -- Sort
-    table.sort(ResultsTable.data, function(a, b)
+    ResultsTable.data = GF.Util.SortStable(ResultsTable.data, function(a, b)
         local av = a[ResultsTable.sortColumn]
         local bv = b[ResultsTable.sortColumn]
         if av == nil and bv == nil then return false end
@@ -185,12 +193,17 @@ function ResultsTable.Refresh()
     end)
 
     -- Update visible rows
-    local maxRows = math.floor(ResultsTable.scrollFrame:GetHeight() / 20) + 2
+    local offset = math.floor((ResultsTable.scrollFrame:GetVerticalScroll() or 0) / 20)
+    local maxRows = math.max(1, math.floor(ResultsTable.scrollFrame:GetHeight() / 20) + 2)
     for i = 1, maxRows do
         local row = GetOrCreateRow(i)
-        local data = ResultsTable.data[i]
+        local dataIndex = offset + i
+        local data = ResultsTable.data[dataIndex]
+        row:ClearAllPoints()
+        row:SetPoint("TOPLEFT", 0, -(dataIndex - 1) * 20)
+        row:SetPoint("TOPRIGHT", 0, -(dataIndex - 1) * 20)
         if data then
-            row.dataIndex = i
+            row.dataIndex = dataIndex
             row:Show()
             local x = 0
             for j, col in ipairs(COLUMNS) do
@@ -202,7 +215,7 @@ function ResultsTable.Refresh()
             end
 
             -- Selection highlight
-            if ResultsTable.selectedRow == i then
+            if GF.App:GetSelected() == data then
                 row.selectedTex:Show()
             else
                 row.selectedTex:Hide()
@@ -211,6 +224,7 @@ function ResultsTable.Refresh()
             row:Hide()
         end
     end
+    for i = maxRows + 1, #ResultsTable.rows do ResultsTable.rows[i]:Hide() end
 
     -- Update content height
     ResultsTable.content:SetHeight(math.max(#ResultsTable.data * 20, ResultsTable.scrollFrame:GetHeight()))

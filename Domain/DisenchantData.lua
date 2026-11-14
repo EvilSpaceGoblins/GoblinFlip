@@ -499,10 +499,11 @@ DisenchantData.GetEstimate = function(itemId, itemLevel, quality, materialPrices
     return {
         available = true,
         provider = "GoblinFlip-Internal",
-        expectedNetPerItem = avgValue,
+        expectedGrossPerItem = avgValue,
         saleFeeRate = 0.05,  -- 5% AH fee assumption
         asOf = type(time) == "function" and time() or 0,
-        stale = false,
+        stale = true,
+        illustrative = true,
         skillVerified = false,
         assumptions = {
             "Based on internal DE probability tables (classic through MoP).",

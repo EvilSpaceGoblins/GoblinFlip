@@ -18,6 +18,7 @@ local STRATEGIES = {
 }
 
 local function copyCoreFields(opportunity, listing, result, index)
+    opportunity.key = table.concat({tostring(listing.scanId or "live"), tostring(listing.variantKey or listing.itemId), tostring(listing.auctionId or listing.rowIndex or index)}, "|")
     opportunity.strategy = result.strategy
     opportunity.itemId = listing.itemId
     opportunity.itemKey = listing.itemKey
@@ -25,6 +26,9 @@ local function copyCoreFields(opportunity, listing, result, index)
     opportunity.itemLink = listing.itemLink
     opportunity.itemName = listing.itemName or ("Item #" .. tostring(listing.itemId))
     opportunity.itemQuality = listing.itemQuality
+    opportunity.itemLevel = listing.itemLevel
+    opportunity.classId = listing.classId
+    opportunity.subClassId = listing.subClassId
     opportunity.itemIcon = listing.itemIcon
     opportunity.auctionId = listing.auctionId
     opportunity.quantity = listing.quantity
@@ -263,6 +267,7 @@ function ProfitEngine.Group(opportunities)
         local group = groupsByKey[key]
         if not group then
             group = {
+                key = "group|" .. tostring(opportunity.scanId) .. "|" .. key,
                 isGroup = true,
                 variantKey = key,
                 itemId = opportunity.itemId,
@@ -291,6 +296,8 @@ function ProfitEngine.Group(opportunities)
             groups[#groups + 1] = group
         end
         group.lots = group.lots + 1
+        group.stale = group.stale or opportunity.stale
+        if opportunity.confidence == "low" then group.confidence = "low" end
         group.quantity = group.quantity + opportunity.quantity
         group.buyoutTotal = group.buyoutTotal + opportunity.buyoutTotal
         group.expectedProceeds = group.expectedProceeds + (opportunity.expectedProceeds or 0)
@@ -364,12 +371,16 @@ end
 
 function ProfitEngine.Compact(opportunity)
     return {
+        key = opportunity.key,
         strategy = opportunity.strategy,
         itemId = opportunity.itemId,
         variantKey = opportunity.variantKey,
         itemLink = opportunity.itemLink,
         itemName = opportunity.itemName,
         itemQuality = opportunity.itemQuality,
+        itemLevel = opportunity.itemLevel,
+        classId = opportunity.classId,
+        subClassId = opportunity.subClassId,
         itemIcon = opportunity.itemIcon,
         quantity = opportunity.quantity,
         buyoutTotal = opportunity.buyoutTotal,

@@ -3,7 +3,7 @@
 local _, GF = ...
 
 GF.Settings = {
-    SCHEMA_VERSION = 1,
+    SCHEMA_VERSION = 2,
     db = nil,
 }
 
@@ -111,6 +111,32 @@ local RANGE_KEYS = {
 }
 
 local function validateValue(key, value)
+    if key == "allowCommodityPurchase" and value == true then
+        return nil, "Commodity purchases are not supported in this release."
+    end
+    if key == "search" then
+        if type(value) == "string" and #value <= 200 then return value end
+        return nil, "Search must be text (up to 200 characters)."
+    end
+    if key == "qualityFilter" then
+        if type(value) ~= "table" then return nil, "Expected a quality selection." end
+        local copy = {}
+        for quality, enabled in pairs(value) do
+            if not GF.Util.IsInteger(quality) or quality > 7 or type(enabled) ~= "boolean" then
+                return nil, "Invalid quality selection."
+            end
+            if enabled then copy[quality] = true end
+        end
+        return copy
+    end
+    if key == "minimapIcon" then
+        if type(value) ~= "table" then return nil, "Invalid minimap settings." end
+        return {
+            hide = value.hide == true, lock = value.lock == true,
+            minimapPos = GF.Util.IsFiniteNumber(value.minimapPos) and value.minimapPos % 360 or 225,
+            radius = GF.Util.IsFiniteNumber(value.radius) and GF.Util.Clamp(value.radius, 40, 160) or 80,
+        }
+    end
     if MONEY_KEYS[key] then
         if not GF.Util.IsCopper(value) then
             return nil, "Expected a non-negative whole number of copper."
@@ -225,34 +251,23 @@ function GF.Settings.Initialize(saved)
     if type(saved) ~= "table" then
         saved = {}
     end
+    GF.Settings.readOnly = saved.schemaVersion ~= nil and
+        (not GF.Util.IsInteger(saved.schemaVersion) or saved.schemaVersion > GF.Settings.SCHEMA_VERSION)
+    if GF.Settings.readOnly then saved = {} end
     GF.Settings.db = saved
+    if saved.schemaVersion == 1 and not saved.migrationBackup then
+        saved.migrationBackup = GF.Util.DeepCopy(saved)
+    end
     ensureDatabaseShape(saved)
-
-    if saved.schemaVersion == nil then
-        saved.schemaVersion = 1
+    if saved.minimapIcon and not saved.settings.minimapIcon then
+        saved.settings.minimapIcon = saved.minimapIcon
     end
-    if saved.schemaVersion > GF.Settings.SCHEMA_VERSION then
-        saved.diagnostics = saved.diagnostics or {}
-        saved.diagnostics.schema = {
-            found = saved.schemaVersion,
-            supported = GF.Settings.SCHEMA_VERSION,
-            message = "Saved data was written by a newer GoblinFlip version; it was not modified.",
-        }
-        -- Do not overwrite settings from a newer schema. Use defaults in memory.
-        saved.settings = saved.settings or {}
-        for key, defaultValue in pairs(DEFAULTS) do
-            if saved.settings[key] == nil then
-                saved.settings[key] = GF.Util.DeepCopy(defaultValue)
-            end
-        end
-        saved.settings.qualityFilter = normalizeQualityFilter(saved.settings.qualityFilter)
-        saved.settings.blacklist = normalizeBlacklist(saved.settings.blacklist)
-        saved.settings.search = type(saved.settings.search) == "string" and saved.settings.search or ""
-        return saved, false
-    end
-
     applyDefaults(saved)
-    return saved, true
+    saved.minimapIcon = saved.settings.minimapIcon
+    saved.onboarding = type(saved.onboarding) == "table" and saved.onboarding or {}
+    saved.onboarding.step = GF.Util.IsInteger(saved.onboarding.step) and GF.Util.Clamp(saved.onboarding.step, 1, 7) or 1
+    saved.schemaVersion = GF.Settings.SCHEMA_VERSION
+    return saved, not GF.Settings.readOnly
 end
 
 function GF.Settings.Get(key)
@@ -260,6 +275,7 @@ function GF.Settings.Get(key)
 end
 
 function GF.Settings.Set(key, value)
+    if GF.Settings.readOnly then return false, "Saved data is from a newer or invalid schema; changes are disabled." end
     local normalized, reason = validateValue(key, value)
     if normalized == nil then
         return false, reason
@@ -329,7 +345,7 @@ function GF.Settings.GetSessionSpent()
 end
 
 function GF.Settings.AddSessionSpent(amount)
-    if not GF.Util.IsCopper(amount) then
+    if not GF.Util.IsCopper(amount) or not GF.Util.IsCopper(GF.Settings.GetSessionSpent() + amount) then
         return false
     end
     GF.Settings.db.session.spent = (GF.Settings.db.session.spent or 0) + amount
@@ -361,6 +377,8 @@ function GF.Settings.ResetAll()
     db.schemaVersion = GF.Settings.SCHEMA_VERSION
     ensureDatabaseShape(db)
     applyDefaults(db)
+    db.onboarding = {step = 1}
+    db.minimapIcon = db.settings.minimapIcon
     db.session.spent = 0
     db.session.startedAt = type(_G.time) == "function" and _G.time() or 0
     return db

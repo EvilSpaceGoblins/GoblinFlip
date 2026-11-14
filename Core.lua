@@ -8,7 +8,7 @@ if type(GF) ~= "table" then
 end
 
 GF.name = ADDON or "GoblinFlip"
-GF.version = "1.2.0"
+GF.version = "0.7.0"
 
 GF.COPPER_PER_SILVER = 100
 GF.COPPER_PER_GOLD = 10000
@@ -65,6 +65,33 @@ end
 
 function GF.Util.IsCopper(value)
     return GF.Util.IsInteger(value, false)
+end
+
+-- Exact floor(amount * part / whole), without an overflowing intermediate.
+function GF.Util.AllocateCopper(amount, part, whole)
+    if not GF.Util.IsCopper(amount) or not GF.Util.IsInteger(part) or not GF.Util.IsInteger(whole)
+        or whole <= 0 or part > whole then return nil end
+    local quotient = math.floor(amount / whole)
+    local remainder = amount - quotient * whole
+    -- Correct division rounding at the exact-integer limit.
+    if remainder < 0 then quotient = quotient - 1; remainder = remainder + whole end
+    local result, carry = 0, 0
+    while part > 0 do
+        if part % 2 == 1 then
+            result = result + quotient
+            if carry >= whole - remainder then
+                carry = carry - (whole - remainder); result = result + 1
+            else carry = carry + remainder end
+        end
+        part = math.floor(part / 2)
+        if part > 0 then
+            quotient = quotient * 2
+            if remainder >= whole - remainder then
+                remainder = remainder - (whole - remainder); quotient = quotient + 1
+            else remainder = remainder * 2 end
+        end
+    end
+    return result
 end
 
 function GF.Util.Clamp(value, low, high)
@@ -304,8 +331,8 @@ function GF.Util.NewId(prefix)
     local stamp = 0
     if type(time) == "function" then
         local ok, value = pcall(time)
-        if ok and type(value) == "number" then
-            stamp = value
+        if ok and GF.Util.IsFiniteNumber(value) then
+            stamp = math.floor(value)
         end
     end
     return string.format("%s-%d-%d", prefix or "gf", stamp, idCounter)

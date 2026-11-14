@@ -66,24 +66,40 @@ function GF.NativeScan:RequestScan()
     if not self.eventRegistered then
         return false, "replicate_event_unavailable"
     end
-    if self.collecting then
+    if self.collecting or self.requestedAt then
         return false, "already_collecting"
     end
+    self.requestedAt = type(time) == "function" and time() or 0
+    self.generation = (self.generation or 0) + 1
+    local generation = self.generation
+    self.marketKey = GF.App and GF.App:GetMarketKey()
     local ok, reason = pcall(api.ReplicateItems)
     if not ok then
+        self.requestedAt = nil
         return false, tostring(reason)
     end
-    self.requestedAt = type(time) == "function" and time() or 0
+    if GF.App then GF.App:After(30, function()
+        if GF.NativeScan.generation == generation and GF.NativeScan.requestedAt and not GF.NativeScan.collecting then
+            GF.NativeScan:Cancel(); GF.App:OnScanError("native_scan_timeout")
+        end
+    end) end
     return true, nil
 end
 
 function GF.NativeScan:BeginCollection()
+    if not self.requestedAt or self.collecting then return end
     local api = ah()
     if type(api) ~= "table" or type(api.GetNumReplicateItems) ~= "function" then
         return
     end
     local ok, count = pcall(api.GetNumReplicateItems)
-    if not ok or type(count) ~= "number" or count <= 0 then
+    if ok and count == 0 then
+        self.requestedAt = nil
+        GF.App:OnScanPayload({}, "native", type(time) == "function" and time() or 0)
+        return
+    end
+    if not ok or type(count) ~= "number" or count < 0 then
+        self.requestedAt = nil
         if GF.App then
             GF.App:OnScanError("native_empty_payload")
         end
@@ -103,17 +119,19 @@ function GF.NativeScan:Step()
     if not self.collecting then
         return
     end
+    if GF.App and GF.App:GetMarketKey() ~= self.marketKey then self:Cancel(); GF.App:OnScanError("market_changed"); return end
     local api = ah()
     local started = type(debugprofilestop) == "function" and debugprofilestop() or 0
     local processed = 0
     while self.index < self.count do
         self.index = self.index + 1
-        local infoOk, replicateInfo = pcall(api.GetReplicateItemInfo, self.index)
+        local infoOk, values = pcall(function() return {api.GetReplicateItemInfo(self.index - 1)} end)
+        local replicateInfo = infoOk and (type(values[1]) == "table" and values[1] or values)
         if infoOk and type(replicateInfo) == "table" then
-            local linkOk, itemLink = pcall(api.GetReplicateItemLink, self.index)
+            local linkOk, itemLink = pcall(api.GetReplicateItemLink, self.index - 1)
             local timeLeft = nil
             if type(api.GetReplicateItemTimeLeft) == "function" then
-                local leftOk, value = pcall(api.GetReplicateItemTimeLeft, self.index)
+                local leftOk, value = pcall(api.GetReplicateItemTimeLeft, self.index - 1)
                 if leftOk then
                     timeLeft = value
                 end
@@ -135,6 +153,7 @@ function GF.NativeScan:Step()
     end
 
     self.collecting = false
+    self.requestedAt = nil
     if self.driver then
         self.driver:Hide()
     end
@@ -146,6 +165,8 @@ function GF.NativeScan:Step()
 end
 
 function GF.NativeScan:Cancel()
+    self.generation = (self.generation or 0) + 1
+    self.requestedAt = nil
     self.collecting = false
     self.index = 0
     self.payload = {}
