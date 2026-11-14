@@ -1,40 +1,122 @@
-# GoblinFlip 0.7.0
+# GoblinFlip
 
-Auction-house vendor flips and disenchant estimates for the WoW Forever 1.60.1 client (interface 16001). This release repairs startup and UI integration and adds first-run setup, feature health, live purchase review and transaction recovery.
+### Buy low. Vendor smart. Know your numbers.
 
-## Install and start
+Find auction-house vendor flips, compare disenchant estimates, and track what you actually earn on **WoW Forever**.
 
-Extract the release ZIP so `Interface/AddOns/GoblinFlip/GoblinFlip.toc` exists. Enable the addon and log in. Setup opens on first login; it can be skipped and resumed with `/gf setup`.
+![Version](https://img.shields.io/badge/version-0.7.0-e6b450)
+![Target client](https://img.shields.io/badge/target-WoW_Forever_1.60.1-1488cc)
+![Interface](https://img.shields.io/badge/interface-16001-555555)
+![Lua](https://img.shields.io/badge/Lua-addon-2c2d72)
+![Locales](https://img.shields.io/badge/locales-English_%2F_German-679b45)
 
-1. Check providers and choose Auctionator or Native in setup.
-2. Set the budget and per-purchase limit. Setup accepts copper or explicit units such as `1g 20s`. Zero budget/limit means unlimited.
-3. Visit an auction house and verify the detected market. Choose the correct market override in Settings if needed.
-4. For Auctionator, manually click its **Get All** action. For Native, click **Scan** in GoblinFlip. Native availability depends on replicate APIs/events in the client.
-5. Select a result, review its **live** quote, click **Review purchase**, then **Confirm purchase**. Each submission requires its own confirmation.
+[Quick start](#quick-start) · [Features](#what-it-does) · [Providers](#providers--dependencies) · [Commands](#commands) · [Development](#development)
 
-`/gf` opens the shared workspace in a separate window. The auction-house tab uses the same workspace. The minimap icon opens the window; right-click provides navigation. Window mode and scan provider are independent.
+## TL;DR
 
-## Providers and health
+**Scan the auction house → find a margin → review the live price → confirm a purchase → track the outcome.**
 
-Auctionator is optional when native replicate scanning is available. Its integration requires the supported FullScan event-bus contract; GoblinFlip does not guess a programmatic scan trigger. DisenchantBuddy is optional and requires its supported `API.v1.GetAverageDisenchantValueByItemID` interface.
+GoblinFlip compares whole-auction buyouts with vendor proceeds or disenchant estimates. It gives you filters, spending limits, a transaction ledger, and a resumable setup guide. Every purchase needs your confirmation.
 
-**Health / setup** shows per-feature status, recovery steps and Recheck. It distinguishes absent, disabled, unloaded and incompatible external addons where the client provides addon-status APIs. Vendor flips do not require DisenchantBuddy. Libraries and their dependencies are bundled; see [THIRD_PARTY.md](THIRD_PARTY.md).
+> **Release status:** 0.7.0 includes startup, UI, calculation, and recovery repairs. Automated mock tests pass; compatibility and layout still need verification in the actual Forever client. Commodity purchasing is currently unavailable.
 
-## Calculations and safeguards
+## What it does
 
-Vendor proceeds = quantity × vendor unit price. Profit = proceeds − whole-lot buyout. ROI = 100 × profit / buyout. For example, 20 items at 375c vendor price with a 5000c buyout yield 2500c profit and 50% ROI.
+| Feature | What you get |
+| --- | --- |
+| **Vendor flips** | Find auctions whose vendor value exceeds their whole-lot buyout. |
+| **Disenchant estimates** | Compare expected material value, with provider and stale-data indicators. |
+| **Profit filters** | Narrow results by profit, ROI, quality, and search text. |
+| **Live purchase review** | Recheck a quote against your funds, limits, market, and quote expiry. |
+| **Spending controls** | Set a per-purchase maximum and a session budget. |
+| **Transaction ledger** | Record purchases, partial receipts, actual proceeds, and manual corrections. |
+| **Scan history** | Browse saved snapshots without turning old results into live purchase offers. |
+| **First-run setup** | Choose a provider, check dependencies, and configure safeguards. |
+| **Flexible workspace** | Use an auction-house tab or a separate window, with minimap access. |
 
-The live quote is evaluated again against minimum profit/ROI, current funds, market, expiry, purchase limit and session budget. Transaction costs use whole copper; expected values may be fractional and are rounded for display. Losses retain their minus sign.
+## Quick start
 
-Disenchant values are estimates. Provider net values are treated as net; gross values have fees deducted once. Internal tables use fixed illustrative material prices, are marked stale, and **cannot be used to purchase**. Their tables and server-specific assumptions still need independent validation. Commodity buying is unavailable in this release.
+### 1. Install
 
-Current defaults: minimum profit **1s**, minimum ROI **0%**, per-purchase maximum **2g**, session budget **20g**, live quote lifetime **10 seconds**. Money fields in the regular Settings/filter panels are labelled in gold; setup fields accept explicit units.
+Extract the release ZIP into your WoW installation so this file exists:
 
-## Ledger and recovery
+```text
+Interface/AddOns/GoblinFlip/GoblinFlip.toc
+```
 
-One submitted purchase remains pending until its outcome is known. A general money decrease is insufficient evidence of a particular purchase. If no reliable confirmation arrives, GoblinFlip marks the outcome uncertain after the timeout. Verify the actual result in-game and use **Verify bought** or **Verify failed** in Ledger. Reload restores unresolved records and blocks new purchases until they are resolved. Confirmed spend is charged once; budget/data resets are blocked while outcomes are pending.
+Enable **GoblinFlip** in the addon list and log in. Required libraries are bundled.
 
-Ledger supports manual entries, partial receipt quantities, actual proceeds and full reversal of the most recent disposal after a verified buyback/refund. Mail/merchant observations are informational; they do not automatically credit receipts or profit. History snapshots are read-only. Newer or invalid saved-data schemas leave the original data untouched and disable trading/saving.
+### 2. Run setup
+
+Setup opens on first login. You can skip it and resume at any time:
+
+```text
+/gf setup
+```
+
+Choose **Auctionator** or **Native** as your scan provider, review feature health, and set your spending limits. Setup accepts amounts such as `1g 20s`; regular Settings money fields are labelled in gold. **Zero budget or purchase limit means unlimited.**
+
+### 3. Scan and review
+
+1. Visit an auction house and check the detected market. Use the market override in Settings if necessary.
+2. With **Auctionator**, manually click its **Get All** action. With **Native**, click **Scan** in GoblinFlip.
+3. Select an opportunity and review its fresh quote.
+4. Click **Review purchase**, then **Confirm purchase**.
+5. Check the result in-game and resolve any uncertain transaction in **Ledger**.
+
+Use `/gf` to open the workspace. The minimap icon opens it too; right-click the icon for navigation. Window preference and scan provider are separate settings.
+
+## Providers & dependencies
+
+| Component | Required? | Purpose |
+| --- | --- | --- |
+| **Bundled libraries** | Included | UI integration, callbacks, and minimap access. |
+| **Auctionator** | Optional | Full-scan data through its supported event-bus contract. Start **Get All** yourself. |
+| **Native auction API** | Alternative scan provider | Requires working replicate APIs and events in your client. |
+| **DisenchantBuddy** | Optional | Disenchant values through `API.v1.GetAverageDisenchantValueByItemID`. |
+
+Open **Health / setup** for feature status, recovery steps, and **Recheck**. Where client APIs allow, it distinguishes missing, disabled, unloaded, and incompatible addons. Vendor flips do not require DisenchantBuddy.
+
+Library provenance and licenses are listed in [THIRD_PARTY.md](THIRD_PARTY.md).
+
+## How the numbers work
+
+```text
+Vendor proceeds = quantity × vendor unit price
+Profit          = proceeds − whole-lot buyout
+ROI             = profit ÷ buyout × 100
+```
+
+**Example:** 20 items worth 375 copper each have a vendor value of 7,500 copper. At a 5,000 copper buyout, that is **25 silver profit** and **50% ROI**.
+
+Disenchant results are estimates. Provider net values remain net; gross values have fees deducted once. Internal material prices are illustrative, marked stale, and cannot authorize purchases. Server-specific material values and probabilities still need independent validation.
+
+### Default safeguards
+
+| Setting | Default |
+| --- | --- |
+| Minimum profit | **1 silver** |
+| Minimum ROI | **0%** |
+| Maximum per purchase | **2 gold** |
+| Session budget | **20 gold** |
+| Live quote lifetime | **10 seconds** |
+
+Before submission, GoblinFlip checks the current quote, funds, market, expiry, filters, and spending limits again. Transaction costs use whole copper; fractional expected values are rounded for display.
+
+## Ledger & recovery
+
+A money decrease alone cannot prove which auction was purchased. If no reliable confirmation arrives, the transaction becomes **uncertain** after the timeout.
+
+Verify the outcome in-game, then choose **Verify bought** or **Verify failed** in Ledger. Unresolved transactions survive reloads and block further purchases and budget/data resets. Confirmed spend is charged once.
+
+The ledger also supports manual entries, partial receipts, actual proceeds, and reversal of the most recent disposal after a verified buyback or refund. Mail and merchant observations do not automatically credit items or profit. Newer or invalid saved-data schemas preserve the original data and disable trading and saving.
+
+## Current limits
+
+- **Commodity purchases are disabled.** Quantity-based commodity orders need their own price-confirmation flow, which this release does not implement.
+- **Internal disenchant tables are illustrative.** They are useful for inspection, but cannot be used to buy.
+- **Purchase outcomes can require manual verification.** General money events are insufficient evidence.
+- **Actual client testing is still required.** Mock tests cannot prove Forever API compatibility or visual layout.
 
 ## Commands
 
@@ -43,18 +125,18 @@ Ledger supports manual entries, partial receipt quantities, actual proceeds and 
 | `/gf` | Open opportunities |
 | `/gf setup` | Resume setup |
 | `/gf health` | Refresh feature health |
-| `/gf scan` | Request selected scan provider |
+| `/gf scan` | Request the selected scan provider |
 | `/gf settings` | Open settings |
-| `/gf settings scanProvider native` | Select native provider |
+| `/gf settings scanProvider native` | Select the native provider |
 | `/gf settings minProfit 100` | Set minimum profit to 100 copper |
-| `/gf standalone` | Toggle separate window |
+| `/gf standalone` | Toggle the separate window |
 | `/gf diagnostics` | Print diagnostics |
-| `/gf budget` | Reset budget when no outcomes are pending |
+| `/gf budget` | Reset the budget when no outcomes are pending |
 | `/gf reset` | Confirm removal of saved addon data |
 
-## Development checks
+## Development
 
-From the repository root:
+Run from the repository root:
 
 ```sh
 lua Tests/run.lua
@@ -62,6 +144,6 @@ GF_TEST_LOCALE=deDE lua Tests/run.lua
 python3 scripts/package.py
 ```
 
-The dependency-free mock suite exercises exact TOC loading, setup, workspace construction, scan metadata, native tuple/table payloads, live review/confirmation, uncertainty/recovery, calculations, ledger and saved-data protection. CI runs it with Lua 5.1 and 5.4 and checks parsing/release packaging. ZIP output is `dist/GoblinFlip-0.7.0.zip`.
+The dependency-free mock suite covers TOC loading, setup, workspace construction, scan payloads, purchase review and confirmation, recovery, calculations, ledger behavior, and saved-data protection. CI is configured for Lua 5.1 and 5.4, syntax checks, and packaging.
 
-Mock tests cannot establish actual Forever API compatibility or visual layout. Before distributing, run the [in-game checklist](docs/IMPLEMENTATION.md) on the target client with no optional addons and with the intended provider versions.
+The package script creates `dist/GoblinFlip-0.7.0.zip`. Before distribution, follow the [implementation notes and in-game checklist](docs/IMPLEMENTATION.md) with and without the intended optional addons.
